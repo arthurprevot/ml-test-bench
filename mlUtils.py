@@ -134,13 +134,18 @@ class tableModel:
         table['isTrainVsTest']=table['otherIndex'] < splitSp # used by other functions later, and for later inspection.
         table.__delitem__('otherIndex')
         self.dataCur = table
+        self.featureCols = featuresExisting
+        self.targetCol = target
         #print 'List features 2: ', table.columns, ", note: 'isTrainVsTest' added in filterTrainVsTest." # and 'otherIndex'
+        #return table
 
-        return table, featuresExisting
 
-
-    def genModel(self, model, features, target, kwargs):
+    def genModel(self, model, features=None, target=None, kwargs={}):
         table = self.dataCur
+
+        # Get features and target col names (best to use these attached to class, i.e. set by filterTrainVsTest, as it is consistent with col used for normalizing.) TODO: check cases where good to override.
+        if features == None: features = self.featureCols
+        if target   == None: target   = self.targetCol
 
         table_train = table[table['isTrainVsTest'] == True]
 
@@ -199,7 +204,7 @@ class tableModel:
         #return clf
 
     def testModel(self, clf, tableProcDict, targetCol, targetNumCompare, testLabel):
-        """Handle model"""
+        """Handle model for linear regression, or for linear regression leading to classification (i.e. numerical features) and for pure classification (based on discrete labels only)."""
         table = self.dataCur
         X_train=tableProcDict['X_train']
         X_test =tableProcDict['X_test']
@@ -250,13 +255,9 @@ class tableModels:
     tableModel class might contain a model made of several models combined, so this one may not be the only one handling multiple models, but only one for testing only.
     """
     def __init__(self, fnameIn=None, fcontent=None):
-        #if type(fcontent) !=type(None): # assume it is panda table
-        #    self.data = fcontent
-        #elif fnameIn:
-        #    self.data = pd.read_csv(fnameIn)
         self.baseModel = tableModel(fnameIn=fnameIn,fcontent=fcontent)
 
-    def testModels(self, model, features, target, targetNumCompare, sizeSet, kwargs):
+    def testModels(self, model, featureCols, targetCol, targetNumCompare, sizeSet, kwargs):
         """Takes raw values or list of values to generate every combinations."""
         # Goal is to rebuild plot such as http://www.astroml.org/sklearn_tutorial/practical.html
         sizeSetOrig = sizeSet[:]
@@ -264,48 +265,75 @@ class tableModels:
         # Generate all combinations
         if type(sizeSet)==int: sizeSet=[sizeSet] # to make it a list of one item
         if type(model)==str: model=[model] # same.
-        if type(features[0])==str: features=[features] # basic type expected is list of strings
+        if type(featureCols[0])==str: featureCols=[featureCols] # basic type expected is list of strings
         if type(kwargs)==dict: kwargs=[kwargs] # same.
-        #print 'in2',sizeSet,model,features,kwargs
+        #print 'in2',sizeSet,model,featureCols,kwargs
 
         #tests = [ [item] for item in sizeSet] # first one
         #print 'tests1',tests
         #tests = [ item1+[item2] for item1 in tests for item2 in model]
         tests = [ [item] for item in model]
-        print 'tests2',tests
-        tests = [ item1+[item2] for item1 in tests for item2 in features]
-        print 'tests3',tests
+        #print 'tests2',tests
+        tests = [ item1+[item2] for item1 in tests for item2 in featureCols]
+        #print 'tests3',tests
         tests = [ item1+[item2] for item1 in tests for item2 in kwargs]
-        print 'tests4',tests
-
-        #return tests, kwargs
+        #print 'tests4',tests
     
         # Now iterate runs
-        testOut_train = []
-        testOut_test = []
-        #for (sizeSet, model, features, kwargs) in tests:
-        for (model, features, kwargs) in tests:
+        #testOut_train = []
+        #testOut_test = []
+        columns=['model','featureCols','kwargs','sizeSet','RMSE_train', 'RMSE_test']
+        #columnTypes=['str','str','str','int','float', 'float']
+        #dtype = np.dtype([('model','S20'),('featureCols','S20'),('kwargs','S20'),('sizeSet','i32'),('RMSE_train','f32'),('RMSE_test','f32')])
+        #tableNp = np.empty((len(tests)*len(sizeSetOrig), len(dtype)), dtype=dtype) #
+        #table=pd.DataFrame(tableNp, columns=columns) # columns=columns # didn't work, not sure why.
+        #table=pd.DataFrame()
+        table=pd.DataFrame({ 'model'       : 'n/a',
+                             'featureCols' : 'n/a',
+                             'kwargs'      : 'n/a',
+                             'sizeSet'     : np.zeros((len(tests)*len(sizeSetOrig)),dtype='int32'),
+                             'RMSE_train'  : np.zeros((len(tests)*len(sizeSetOrig)),dtype='int32'),
+                             'RMSE_test'   : np.zeros((len(tests)*len(sizeSetOrig)),dtype='int32')
+                            }, columns=columns) # , columns=columns to force order.
+        
+        table = table.fillna(0) # or could use a[:] = numpy.NAN on numpy source
+
+        ii = -1
+        #for (sizeSet, model, featureCols, kwargs) in tests:
+        for (model, featureCols, kwargs) in tests:
           for sizeSet in sizeSetOrig:
+            ii+=1
             print '###----- item %s in %s'%(sizeSet, sizeSetOrig)
-            print '### items:',sizeSet,model,features,kwargs
+            print '### items:',sizeSet,model,featureCols,kwargs
             modelCur = tableModel(fcontent=self.baseModel.dataCur)
 
-            table2, features2 = modelCur.filterTrainVsTest(features, target, sizeTrainingSet=sizeSet)
-            clf, tableProcDict = modelCur.genModel(model, features2, target, kwargs)
-            cost_train, cost_test = modelCur.testModel(clf, tableProcDict, target, targetNumCompare, sizeSet)
+            modelCur.filterTrainVsTest(featureCols, targetCol, sizeTrainingSet=sizeSet)
+            clf, tableProcDict = modelCur.genModel(model, kwargs=kwargs)
+            cost_train, cost_test = modelCur.testModel(clf, tableProcDict, targetCol, targetNumCompare, sizeSet)
 
-            testOut_train.append(cost_train)
-            testOut_test.append(cost_test)
+            #testOut_train.append(cost_train)
+            #testOut_test.append(cost_test)
+            table['RMSE_train'].iloc[ii] = cost_train
+            table['RMSE_test'].iloc[ii] = cost_test
+            table['model'].iloc[ii] = model
+            table['featureCols'].iloc[ii] = featureCols
+            table['kwargs'].iloc[ii] = kwargs
+            table['sizeSet'].iloc[ii] = sizeSet
 
-          fig = plt.figure()
-          figax = fig.add_subplot(111)
-          figax.plot(sizeSetOrig, testOut_train, 'g-')
-          figax.plot(sizeSetOrig, testOut_test, 'b-')
-          figax.set_xlabel('size set')
-          figax.set_ylabel('cost')
-          figax.grid(True)
-          plt.show()
-          testOut_train, testOut_test = [], []
+          #fig = plt.figure()
+          #figax = fig.add_subplot(111)
+          #figax.plot(sizeSetOrig, testOut_train, 'g-')
+          #figax.plot(sizeSetOrig, testOut_test, 'b-')
+          #figax.set_xlabel('size set')
+          #figax.set_ylabel('cost')
+          #figax.grid(True)
+          #plt.show()
+          #testOut_train, testOut_test = [], []
+
+        sendToFile = True
+        fnameTableOut = 'tempo/table.csv'
+        if sendToFile and fnameTableOut != None:
+            table.to_csv(fnameTableOut) # , encoding='utf_32'
         return fig, figax
 
 
@@ -446,17 +474,12 @@ if __name__ == "__main__":
     fnameIn='data/crowdfunding_4_viz_tmp.csv' # may be overwritten below
     if len(sys.argv) > 1: fnameIn=sys.argv[1]
 
-    #table = tb.tabarray(SVfile=fnameIn)
     table = pd.read_csv(fnameIn)
 
     # To run
-    #python analyzeML.py > data/indiegogo_4_viz_analysis.txt
+    #python mlUtils.py data/crowdfunding_4_viz_tmp.csv > data/crowdfunding_4_viz_mlOut.txt
 
-
-    #print 'table orig'; print table
     #table = removeOutliers(table)
-    #print 'table post removeOutlier'; print table
-    # Full set ['nbUpdates', 'nbComments', 'nbBackers', 'nbFriendsFB', 'amountPledged', 'amountGoal', 'amountOver']
 
     #genScatter('amountPledged','amountGoal',  xrange=[-1000,11000], yrange=[-1000,11000])
     #genScatter('amountPledged','nbUpdates',   xrange=[-1000,11000], yrange=[-10,50])
@@ -501,6 +524,7 @@ if __name__ == "__main__":
     #yCol = 'amountPledged'
     #clf, table2, X_train, X_test, y_train, y_test = genModel(table, features=XCols, label=yCol, sizeTrainingSet=2500, n_iter=30)
 
+    # Full set ['nbUpdates', 'nbComments', 'nbBackers', 'nbFriendsFB', 'amountPledged', 'amountGoal', 'amountOver']
     featuresCatAll = ['gender', 'supCat', 'location', 'country', 'platform']
     featuresNumAll = ['nbUpdates', 'nbComments', 'nbBackers', 'nbFriendsFB', 'amountGoal'] # 'amountOver'
     features = ['nbFriendsFB', 'amountGoal', 'nbFriendsFB__nbFriendsFB', 'amountGoal__amountGoal', 'nbFriendsFB__amountGoal', 'gender', 'supCat', 'country'] # 'amountOver'

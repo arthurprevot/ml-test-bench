@@ -1,18 +1,6 @@
 #!/usr/bin/python2.7
-# -*- coding: UTF-8 -*-
 
-#import numpy as np
-#import tabular as tb
 import sys
-#import os
-#import re
-#import pandas as pd
-#import scipy as sp
-#import matplotlib as ml
-#from pylab import plt
-##from matplotlib import *
-#from matplotlib.markers import MarkerStyle; mkStyles = MarkerStyle()
-
 import mlUtils as mu
 
 #fnameIn='data/indiegogo_4_viz_tmp.csv'
@@ -21,8 +9,6 @@ fnameIn='data/crowdfunding_4_viz_tmp.csv'
 mlAnalysis = mu.tableModel(fnameIn)
 #print 'table orig'; print table
 #table = mlAnalysis.removeOutliers(table)
-#print 'table post removeOutlier'; print table
-# Full set ['nbUpdates', 'nbComments', 'nbBackers', 'nbFriendsFB', 'amountPledged', 'amountGoal', 'amountOver']
 
 mlAnalysis.genScatter('amountPledged','amountGoal',  xrange=[-1000,11000], yrange=[-1000,11000])
 mlAnalysis.genScatter('amountPledged','nbUpdates',   xrange=[-1000,11000], yrange=[-10,50])
@@ -63,7 +49,7 @@ mlAnalysis.genLinRegPlot('nbBackers','amountPledged',   xrange=[-10,1000])
 mlAnalysis.genLinRegPlot('nbFriendsFB','amountPledged', xrange=[-10,1000])
 
 
-
+# Full set ['nbUpdates', 'nbComments', 'nbBackers', 'nbFriendsFB', 'amountPledged', 'amountGoal', 'amountOver']
 #features = ['nbUpdates', 'nbComments', 'nbBackers', 'nbFriendsFB', 'amountGoal', lambda x: x**2] # 'amountOver'
 features = ['nbUpdates', 'nbComments', 'nbBackers', 'nbFriendsFB', 'amountGoal', 'nbFriendsFB__nbFriendsFB'] # 'amountOver'
 target = 'amountPledged'
@@ -98,69 +84,3 @@ mlMultiTest.baseModel.removeOutliers('amountPledged', 50000)
 targetNumCompare='amountGoal'
 fig, figax = mlMultiTest.testModels(model, features, target, targetNumCompare, testCrit, kwargs)
 
-
-
-
-if __name__ == "__main__":
-    fnameIn='data/indiegogo_4_viz_tmp.csv' # may be overwritten below
-    fnameIn='data/kickstarter_4_viz_tmp.csv' # may be overwritten below
-    fnameIn='data/crowdcube_4_viz_tmp.csv' # may be overwritten below
-    fnameIn='data/crowdfunding_4_viz_tmp.csv' # may be overwritten below
-    if len(sys.argv) > 1: fnameIn=sys.argv[1]
-
-    #table = tb.tabarray(SVfile=fnameIn)
-    #table = pd.read_csv(fnameIn)
-
-    # To run
-    #python analyzeAll.py > data/indiegogo_4_viz_analysis.txt
-
-
-
-
-"""
-from sklearn import linear_model
-clf = linear_model.LinearRegression()
-X = [[0, 0], [1, 1], [2, 2]] # orig [[0, 0], [1, 1], [2, 2]]
-y = [0, 1, 2]
-clf.fit (X=X, y=y)
-#LinearRegression(copy_X=True, fit_intercept=True, normalize=False)
-clf.coef_
-#array([ 0.5,  0.5])
-
-fig = plt.figure()
-figax = fig.add_subplot(111)
-figax.plot(X, y, c='r')
-#figax.plot(x=X, y=clf.predict(X[:, np.newaxis]), c='b-') # X[:, np.newaxis] trick needed only if X is one dimensional as linear reg or predicte function requires X in 2D.
-figax.plot(X, clf.predict(X), c='b')
-plt.show()
-
-from sklearn.linear_model import SGDClassifier
-X = [[0., 0.], [1., 1.]]
-y = [0, 1]
-clf = SGDClassifier(loss="hinge", penalty="l2")
-clf.fit(X, y)
-#SGDClassifier(alpha=0.0001, class_weight=None, epsilon=0.1, eta0=0.0, fit_intercept=True, l1_ratio=0.15, learning_rate='optimal', loss='hinge', n_iter=5, n_jobs=1, penalty='l2', power_t=0.5, random_state=None, rho=None, shuffle=False, verbose=0, warm_start=False)
-clf.predict([[2., 2.]])
-
-#x = table['nbUpdates']
-#y = table['nbComments']
-#scatter(x,y, marker='^', c='r')
-#show()
-
-#tablePD = convertTabarray2Panda(table)
-#table = convertPanda2Tabarray(tablePD)
-
-# Split from http://scikit-learn.github.io/scikit-learn-tutorial/general_concepts.html#classification
-# Found a better way though: 
-#indices = np.arange(len(X))
-#indices[:10]
-#array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-#print 'Indices1: ',indices[:10]
-#np.random.RandomState(42).shuffle(indices)
-#indices[:10]
-#array([ 73,  18, 118,  78,  76,  31,  64, 141,  68,  82])
-#print 'Indices2: ',indices[:10]
-#X = X[indices]
-#y = y[indices]
-
-"""
