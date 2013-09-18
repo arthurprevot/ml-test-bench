@@ -267,41 +267,30 @@ class tableModels:
         if type(model)==str: model=[model] # same.
         if type(featureCols[0])==str: featureCols=[featureCols] # basic type expected is list of strings
         if type(kwargs)==dict: kwargs=[kwargs] # same.
-        #print 'in2',sizeSet,model,featureCols,kwargs
 
-        #tests = [ [item] for item in sizeSet] # first one
-        #print 'tests1',tests
-        #tests = [ item1+[item2] for item1 in tests for item2 in model]
-        tests = [ [item] for item in model]
-        #print 'tests2',tests
+        tests = [ [item] for item in sizeSet] # first one
+        tests = [ item1+[item2] for item1 in tests for item2 in model]
+        #tests = [ [item] for item in model]
         tests = [ item1+[item2] for item1 in tests for item2 in featureCols]
-        #print 'tests3',tests
         tests = [ item1+[item2] for item1 in tests for item2 in kwargs]
-        #print 'tests4',tests
     
-        # Now iterate runs
-        #testOut_train = []
-        #testOut_test = []
+        # Now iterate runs and fill table on params and results.
         columns=['model','featureCols','kwargs','sizeSet','RMSE_train', 'RMSE_test']
-        #columnTypes=['str','str','str','int','float', 'float']
         #dtype = np.dtype([('model','S20'),('featureCols','S20'),('kwargs','S20'),('sizeSet','i32'),('RMSE_train','f32'),('RMSE_test','f32')])
         #tableNp = np.empty((len(tests)*len(sizeSetOrig), len(dtype)), dtype=dtype) #
         #table=pd.DataFrame(tableNp, columns=columns) # columns=columns # didn't work, not sure why.
-        #table=pd.DataFrame()
         table=pd.DataFrame({ 'model'       : 'n/a',
                              'featureCols' : 'n/a',
                              'kwargs'      : 'n/a',
-                             'sizeSet'     : np.zeros((len(tests)*len(sizeSetOrig)),dtype='int32'),
-                             'RMSE_train'  : np.zeros((len(tests)*len(sizeSetOrig)),dtype='int32'),
-                             'RMSE_test'   : np.zeros((len(tests)*len(sizeSetOrig)),dtype='int32')
+                             'sizeSet'     : np.zeros((len(tests)),dtype='int32'),
+                             'RMSE_train'  : np.zeros((len(tests)),dtype='f32'),
+                             'RMSE_test'   : np.zeros((len(tests)),dtype='f32')
                             }, columns=columns) # , columns=columns to force order.
-        
-        table = table.fillna(0) # or could use a[:] = numpy.NAN on numpy source
-
+ 
         ii = -1
-        #for (sizeSet, model, featureCols, kwargs) in tests:
-        for (model, featureCols, kwargs) in tests:
-          for sizeSet in sizeSetOrig:
+        for (sizeSet, model, featureCols, kwargs) in tests:
+        #for (model, featureCols, kwargs) in tests:
+          #for sizeSet in sizeSetOrig:
             ii+=1
             print '###----- item %s in %s'%(sizeSet, sizeSetOrig)
             print '### items:',sizeSet,model,featureCols,kwargs
@@ -311,35 +300,54 @@ class tableModels:
             clf, tableProcDict = modelCur.genModel(model, kwargs=kwargs)
             cost_train, cost_test = modelCur.testModel(clf, tableProcDict, targetCol, targetNumCompare, sizeSet)
 
-            #testOut_train.append(cost_train)
-            #testOut_test.append(cost_test)
-            table['RMSE_train'].iloc[ii] = cost_train
-            table['RMSE_test'].iloc[ii] = cost_test
             table['model'].iloc[ii] = model
             table['featureCols'].iloc[ii] = featureCols
             table['kwargs'].iloc[ii] = kwargs
             table['sizeSet'].iloc[ii] = sizeSet
+            table['RMSE_train'].iloc[ii] = cost_train
+            table['RMSE_test'].iloc[ii] = cost_test
 
-          #fig = plt.figure()
-          #figax = fig.add_subplot(111)
-          #figax.plot(sizeSetOrig, testOut_train, 'g-')
-          #figax.plot(sizeSetOrig, testOut_test, 'b-')
-          #figax.set_xlabel('size set')
-          #figax.set_ylabel('cost')
-          #figax.grid(True)
-          #plt.show()
-          #testOut_train, testOut_test = [], []
-
+        # Send table to file
         sendToFile = True
         fnameTableOut = 'tempo/table.csv'
         if sendToFile and fnameTableOut != None:
+            table.sort(['model'], inplace=True)
             table.to_csv(fnameTableOut) # , encoding='utf_32'
-        return fig, figax
+
+        # Plot data, individual pair of curves RMSE_train and RMSE_test vs sizeSet for each other combination of params.
+        fig = plt.figure()
+        figax = fig.add_subplot(111)
+        # Need to convert table content to str for groupby function below (i.e. so it is hashable)
+        table['modelTmp'] = table['model'].apply(lambda x: str(x)) #.astype(str) # str(table['model'])
+        table['kwargsStr'] = table['kwargs'].apply(lambda x: str(x)) # str(table['kwargs'])
+        table['featureColsStr'] = table['featureCols'].apply(lambda x: str(x))#.astype(str) # str(table['featureCols'])
+        table.to_csv('tempo/table2Test.csv') ### DEBUG
+        # Find uniq combination of all params except 'sizeSet'.
+        tableUniq = table[['modelTmp','featureColsStr','kwargsStr']].groupby(['modelTmp','featureColsStr','kwargsStr']).first()
+        tableUniq.to_csv('tempo/tableDEBUG.csv') ### DEBUG
+        # Create a curve (based on a tmp table) for each combination of unique params.
+        for ii in np.arange(len(tableUniq)):
+            # Build table of every sizeSet datapoints for given other param combination.
+            #tableSm = table.groupby(['model','featureColsStr','kwargsStr']).first()
+            tableSm = table[(table['modelTmp']==tableUniq['modelTmp'].iloc[ii])
+                          & (table['featureColsStr']==tableUniq['featureColsStr'].iloc[ii])
+                          & (table['kwargsStr']==tableUniq['kwargsStr'].iloc[ii]) ]
+            #tableSm = table[ (table['featureColsStr']==tableUniq['featureColsStr'].iloc[ii]) ]
+            #tableSm = table[ (table['model']==tableUniq['model'].iloc[ii]) ]
+
+            figax.plot(tableSm['sizeSet'], tableSm['RMSE_train'], 'g-')
+            figax.plot(tableSm['sizeSet'], tableSm['RMSE_test'], 'bo')
+        figax.set_xlabel('size set')
+        figax.set_ylabel('cost')
+        figax.grid(True)
+        plt.show()
+
+        return table
 
 
 
 #-------------- Serie of util functions --------------------------
-
+ 
 def genScatter(table,xSource,ySource, xrange=None, yrange=None):
     statusRepr = {'success':{'color':'g'},
                   'failure':{'color':'r'},
