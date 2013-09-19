@@ -177,6 +177,9 @@ class tableModel:
             if 'eta0' in kwargs.keys() : kwargs.pop('eta0')
             if 'n_iter' in kwargs.keys() : kwargs.pop('n_iter')
 
+        if model == 'RandomForestRegressor':
+            if 'alpha' in kwargs.keys() : kwargs.pop('alpha')
+
         # Run models
         from sklearn import linear_model
         from sklearn import ensemble
@@ -200,6 +203,7 @@ class tableModel:
 
         tableProcDict = {'X_train':X_train, 'X_test':X_test, 'y_train':y_train, 'y_test':y_test}
         #TODO attach above var to self to not have to pass it, probably as self.dataProc
+        #TODO: get kwargs out so it can be reported according to updated content.
         return clf, tableProcDict
         #return clf
 
@@ -218,11 +222,11 @@ class tableModel:
         #table[targetCol+'Pred']=pd.Series(np.hstack((y_train,y_test)), index=table.index) # for debug
 
         if table[targetCol].dtype.name == 'float64': # assuming table[targetCol+'Pred'] is also 'float64'
-            cost_train = np.sqrt(np.mean((yp_train-y_train)**2)) # same as rmse
-            cost_test  = np.sqrt(np.mean((yp_test-y_test)**2)) # same as rmse
+            #cost_train = np.sqrt(np.mean((yp_train-y_train)**2)) # same as rmse
+            #cost_test  = np.sqrt(np.mean((yp_test-y_test)**2)) # same as rmse
             print 'test: %s, all table cols=%s'%(testLabel, sorted(table.columns))
             print 'test: %s, features cols=%s'%(testLabel, sorted(X_train.columns))
-            print 'test: %s, features coefs=%s'%(testLabel, clf.coef_)
+            if hasattr(clf,'coef_'): print 'test: %s, features coefs=%s'%(testLabel, clf.coef_) # randomForest doesn't have it.
 
             rmse_train = ml.mlab.rms_flat(yp_train-y_train)
             corr_train = sp.stats.pearsonr(yp_train, y_train)
@@ -245,7 +249,10 @@ class tableModel:
 
         #fnameOut='data/crowdfunding_5_ML_nbIter_%s.csv'%(testLabel) # may be overwritten below
         #table.to_csv(fnameOut)
-        return cost_train, cost_test
+        results = {'rmse_train':rmse_train, 'rmse_test':rmse_test,
+                   'corr_train':corr_train, 'corr_test':corr_test,
+                   'clf_train':clf_train  , 'clf_test':clf_test}
+        return table, results
 
     # testModels was put in other class. Should consider having methodes to deal with building a model based on multiple models (using bagging).
     # This might require having the class data being duplicated multiple time for each model (could require a lot of memory or to dump them as pickle).
@@ -275,7 +282,8 @@ class tableModels:
         tests = [ item1+[item2] for item1 in tests for item2 in kwargs]
     
         # Now iterate runs and fill table on params and results.
-        columns=['model','featureCols','kwargs','sizeSet','RMSE_train', 'RMSE_test']
+        columns=['model','featureCols','kwargs','sizeSet','RMSE_train', 'RMSE_test',
+                 'corr_train', 'corr_test', 'clf_train', 'clf_test']
         #dtype = np.dtype([('model','S20'),('featureCols','S20'),('kwargs','S20'),('sizeSet','i32'),('RMSE_train','f32'),('RMSE_test','f32')])
         #tableNp = np.empty((len(tests)*len(sizeSetOrig), len(dtype)), dtype=dtype) #
         #table=pd.DataFrame(tableNp, columns=columns) # columns=columns # didn't work, not sure why.
@@ -284,7 +292,11 @@ class tableModels:
                              'kwargs'      : 'n/a',
                              'sizeSet'     : np.zeros((len(tests)),dtype='int32'),
                              'RMSE_train'  : np.zeros((len(tests)),dtype='f32'),
-                             'RMSE_test'   : np.zeros((len(tests)),dtype='f32')
+                             'RMSE_test'   : np.zeros((len(tests)),dtype='f32'),
+                             'corr_train'  : np.zeros((len(tests)),dtype='f32'),
+                             'corr_test'   : np.zeros((len(tests)),dtype='f32'),
+                             'clf_train'  : np.zeros((len(tests)),dtype='f32'),
+                             'clf_test'   : np.zeros((len(tests)),dtype='f32'),
                             }, columns=columns) # , columns=columns to force order.
  
         ii = -1
@@ -298,51 +310,59 @@ class tableModels:
 
             modelCur.filterTrainVsTest(featureCols, targetCol, sizeTrainingSet=sizeSet)
             clf, tableProcDict = modelCur.genModel(model, kwargs=kwargs)
-            cost_train, cost_test = modelCur.testModel(clf, tableProcDict, targetCol, targetNumCompare, sizeSet)
-
+            table2, results = modelCur.testModel(clf, tableProcDict, targetCol, targetNumCompare, sizeSet)
+            #print results
+            #print table.columns
+            
             table['model'].iloc[ii] = model
             table['featureCols'].iloc[ii] = featureCols
             table['kwargs'].iloc[ii] = kwargs
             table['sizeSet'].iloc[ii] = sizeSet
-            table['RMSE_train'].iloc[ii] = cost_train
-            table['RMSE_test'].iloc[ii] = cost_test
+            table['RMSE_train'].iloc[ii] = results['rmse_train']
+            table['RMSE_test'].iloc[ii]  = results['rmse_test']
+            table['corr_train'].iloc[ii] = results['corr_train'][0]
+            table['corr_test'].iloc[ii]  = results['corr_test'][0]
+            table['clf_train'].iloc[ii]  = results['clf_train']
+            table['clf_test'].iloc[ii]   = results['clf_test']
+        self.table = table
 
+    def saveRunResults(self, fnameOut):
+        table = self.table
         # Send table to file
+        #fnameTableOut = 'tempo/table.csv'
         sendToFile = True
-        fnameTableOut = 'tempo/table.csv'
-        if sendToFile and fnameTableOut != None:
+        if sendToFile and fnameOut != None:
             table.sort(['model'], inplace=True)
-            table.to_csv(fnameTableOut) # , encoding='utf_32'
+            table.to_csv(fnameOut) # , encoding='utf_32'
 
+    def plotRunResults(self):
+        table = self.table
         # Plot data, individual pair of curves RMSE_train and RMSE_test vs sizeSet for each other combination of params.
         fig = plt.figure()
         figax = fig.add_subplot(111)
         # Need to convert table content to str for groupby function below (i.e. so it is hashable)
-        table['modelTmp'] = table['model'].apply(lambda x: str(x)) #.astype(str) # str(table['model'])
-        table['kwargsStr'] = table['kwargs'].apply(lambda x: str(x)) # str(table['kwargs'])
-        table['featureColsStr'] = table['featureCols'].apply(lambda x: str(x))#.astype(str) # str(table['featureCols'])
-        table.to_csv('tempo/table2Test.csv') ### DEBUG
+        table['modelTmp'] = table['model'].apply(lambda x: str(x)) #.astype(str) 
+        table['kwargsStr'] = table['kwargs'].apply(lambda x: str(x)) 
+        table['featureColsStr'] = table['featureCols'].apply(lambda x: str(x))
+        #table.to_csv('tempo/tableDEBUG.csv') ### DEBUG
         # Find uniq combination of all params except 'sizeSet'.
         tableUniq = table[['modelTmp','featureColsStr','kwargsStr']].groupby(['modelTmp','featureColsStr','kwargsStr']).first()
-        tableUniq.to_csv('tempo/tableDEBUG.csv') ### DEBUG
-        # Create a curve (based on a tmp table) for each combination of unique params.
+        #tableUniq.to_csv('tempo/tableDEBUG2.csv') ### DEBUG
+        # Create a RMSE vs sizeSet plot (based on a tmp table) for each combination of unique other params.
         for ii in np.arange(len(tableUniq)):
             # Build table of every sizeSet datapoints for given other param combination.
-            #tableSm = table.groupby(['model','featureColsStr','kwargsStr']).first()
             tableSm = table[(table['modelTmp']==tableUniq['modelTmp'].iloc[ii])
                           & (table['featureColsStr']==tableUniq['featureColsStr'].iloc[ii])
                           & (table['kwargsStr']==tableUniq['kwargsStr'].iloc[ii]) ]
-            #tableSm = table[ (table['featureColsStr']==tableUniq['featureColsStr'].iloc[ii]) ]
-            #tableSm = table[ (table['model']==tableUniq['model'].iloc[ii]) ]
-
+            #TODO: Change to different shade of blue or green for each pass, to dissociate plots.
             figax.plot(tableSm['sizeSet'], tableSm['RMSE_train'], 'g-')
-            figax.plot(tableSm['sizeSet'], tableSm['RMSE_test'], 'bo')
+            figax.plot(tableSm['sizeSet'], tableSm['RMSE_test'], 'b-')
         figax.set_xlabel('size set')
         figax.set_ylabel('cost')
         figax.grid(True)
         plt.show()
 
-        return table
+        #return table
 
 
 
