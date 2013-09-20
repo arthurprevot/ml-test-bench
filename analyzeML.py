@@ -65,11 +65,11 @@ features = ['nbUpdates', 'nbComments', 'nbBackers', 'nbFriendsFB', 'amountGoal',
 target = 'amountPledged'
 kwargs={} # sizeTrainingSet=2500, n_iter=30
 mlAnalysis.filterTrainVsTest(features=features, target=target,sizeTrainingSet=2500)
-clf, tableProcDict = mlAnalysis.genModel( model='SGDRegressor', features=features, target=target, kwargs=kwargs)
+clf, tableProcDict, kwargUp = mlAnalysis.genModel( model='SGDRegressor', features=features, target=target, kwargs=kwargs)
 
 # Test random forest.
 mlAnalysis.filterTrainVsTest(features=features, target=target,sizeTrainingSet=2500)
-clf2, tableProcDict2 = mlAnalysis.genModel( model='RandomForestRegressor', features=features, target=target, kwargs=kwargs)
+clf2, tableProcDict2, kwargUp = mlAnalysis.genModel( model='RandomForestRegressor', features=features, target=target, kwargs=kwargs)
 from StringIO import StringIO
 out = StringIO()
 out = sklearn.tree.export_graphviz(clf2.estimators_[0], out_file=out) # to get one tree out of the 10.
@@ -104,6 +104,7 @@ model = ['Ridge', 'RandomForestRegressor' ] #, 'LinearRegression' is terrible, m
 # alpha=0.0000000001, n_iter=100
 #kwargs = {'alpha':0.001, 'n_iter':100, 'eta0':0.001, 'shuffle':False, 'removeOutliers':True} # eta0=0.01 default
 kwargs = {'alpha':0.001, 'n_iter':100, 'eta0':0.001} # eta0=0.01 default
+kwargs = [{'alpha':0.001, 'n_iter':100, 'eta0':0.001},{'alpha':0.002, 'n_iter':100, 'eta0':0.001}] # eta0=0.01 default
 
 mlMultiTest = mu.tableModels(fnameIn)
 mlMultiTest.baseModel.shuffle()

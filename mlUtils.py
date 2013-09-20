@@ -139,6 +139,15 @@ class tableModel:
         #print 'List features 2: ', table.columns, ", note: 'isTrainVsTest' added in filterTrainVsTest." # and 'otherIndex'
         #return table
 
+    def removeInvalidKwargs(self, model, kwargs):
+        if model != 'SGDRegressor':
+            if 'eta0' in kwargs.keys() : kwargs.pop('eta0')
+            if 'n_iter' in kwargs.keys() : kwargs.pop('n_iter')
+
+        if model == 'RandomForestRegressor':
+            if 'alpha' in kwargs.keys() : kwargs.pop('alpha')
+        return kwargs
+
 
     def genModel(self, model, features=None, target=None, kwargs={}):
         table = self.dataCur
@@ -173,12 +182,7 @@ class tableModel:
             X_test = pd.DataFrame(X_test_np, columns=X_test.columns)
 
         # Remove params from kwargs
-        if model != 'SGDRegressor':
-            if 'eta0' in kwargs.keys() : kwargs.pop('eta0')
-            if 'n_iter' in kwargs.keys() : kwargs.pop('n_iter')
-
-        if model == 'RandomForestRegressor':
-            if 'alpha' in kwargs.keys() : kwargs.pop('alpha')
+        kwargs = self.removeInvalidKwargs(model, kwargs)
 
         # Run models
         from sklearn import linear_model
@@ -204,7 +208,7 @@ class tableModel:
         tableProcDict = {'X_train':X_train, 'X_test':X_test, 'y_train':y_train, 'y_test':y_test}
         #TODO attach above var to self to not have to pass it, probably as self.dataProc
         #TODO: get kwargs out so it can be reported according to updated content.
-        return clf, tableProcDict
+        return clf, tableProcDict, kwargs
         #return clf
 
     def testModel(self, clf, tableProcDict, targetCol, targetNumCompare, testLabel):
@@ -216,7 +220,7 @@ class tableModel:
         y_test =tableProcDict['y_test']
 
         yp_train=clf.predict(X_train)
-        yp_test=clf.predict(X_test)
+        yp_test =clf.predict(X_test)
 
         table[targetCol+'Pred']=pd.Series(np.hstack((yp_train,yp_test)), index=table.index) # for later inspection
         #table[targetCol+'Pred']=pd.Series(np.hstack((y_train,y_test)), index=table.index) # for debug
@@ -226,7 +230,9 @@ class tableModel:
             #cost_test  = np.sqrt(np.mean((yp_test-y_test)**2)) # same as rmse
             print 'test: %s, all table cols=%s'%(testLabel, sorted(table.columns))
             print 'test: %s, features cols=%s'%(testLabel, sorted(X_train.columns))
-            if hasattr(clf,'coef_'): print 'test: %s, features coefs=%s'%(testLabel, clf.coef_) # randomForest doesn't have it.
+            if hasattr(clf,'coef_'): coeffs = clf.coef_
+            else                   : coeffs = ['n/a']
+            print 'test: %s, features coefs=%s'%(testLabel, coeffs) # randomForest doesn't have it.
 
             rmse_train = ml.mlab.rms_flat(yp_train-y_train)
             corr_train = sp.stats.pearsonr(yp_train, y_train)
@@ -251,7 +257,8 @@ class tableModel:
         #table.to_csv(fnameOut)
         results = {'rmse_train':rmse_train, 'rmse_test':rmse_test,
                    'corr_train':corr_train, 'corr_test':corr_test,
-                   'clf_train':clf_train  , 'clf_test':clf_test}
+                   'clf_train':clf_train  , 'clf_test':clf_test,
+                   'coeffs':coeffs}
         return table, results
 
     # testModels was put in other class. Should consider having methodes to deal with building a model based on multiple models (using bagging).
@@ -279,11 +286,11 @@ class tableModels:
         tests = [ item1+[item2] for item1 in tests for item2 in model]
         #tests = [ [item] for item in model]
         tests = [ item1+[item2] for item1 in tests for item2 in featureCols]
-        tests = [ item1+[item2] for item1 in tests for item2 in kwargs]
+        tests = [ item1+[item2] for item1 in tests for item2 in kwargs] # sometimes duplicates setup for kwargs that will be discarded anyway. TODO: optimize.
     
         # Now iterate runs and fill table on params and results.
-        columns=['model','featureCols','kwargs','sizeSet','RMSE_train', 'RMSE_test',
-                 'corr_train', 'corr_test', 'clf_train', 'clf_test']
+        columns=['model','featureCols','kwargs','sizeSet','rmse_train', 'rmse_test',
+                 'corr_train', 'corr_test', 'clf_train', 'clf_test','coeffs']
         #dtype = np.dtype([('model','S20'),('featureCols','S20'),('kwargs','S20'),('sizeSet','i32'),('RMSE_train','f32'),('RMSE_test','f32')])
         #tableNp = np.empty((len(tests)*len(sizeSetOrig), len(dtype)), dtype=dtype) #
         #table=pd.DataFrame(tableNp, columns=columns) # columns=columns # didn't work, not sure why.
@@ -291,12 +298,13 @@ class tableModels:
                              'featureCols' : 'n/a',
                              'kwargs'      : 'n/a',
                              'sizeSet'     : np.zeros((len(tests)),dtype='int32'),
-                             'RMSE_train'  : np.zeros((len(tests)),dtype='f32'),
-                             'RMSE_test'   : np.zeros((len(tests)),dtype='f32'),
+                             'rmse_train'  : np.zeros((len(tests)),dtype='f32'),
+                             'rmse_test'   : np.zeros((len(tests)),dtype='f32'),
                              'corr_train'  : np.zeros((len(tests)),dtype='f32'),
                              'corr_test'   : np.zeros((len(tests)),dtype='f32'),
                              'clf_train'  : np.zeros((len(tests)),dtype='f32'),
                              'clf_test'   : np.zeros((len(tests)),dtype='f32'),
+                             'coeffs'      : 'n/a',
                             }, columns=columns) # , columns=columns to force order.
  
         ii = -1
@@ -309,21 +317,22 @@ class tableModels:
             modelCur = tableModel(fcontent=self.baseModel.dataCur)
 
             modelCur.filterTrainVsTest(featureCols, targetCol, sizeTrainingSet=sizeSet)
-            clf, tableProcDict = modelCur.genModel(model, kwargs=kwargs)
+            clf, tableProcDict, kwargsUp = modelCur.genModel(model, kwargs=kwargs.copy())
             table2, results = modelCur.testModel(clf, tableProcDict, targetCol, targetNumCompare, sizeSet)
             #print results
             #print table.columns
             
-            table['model'].iloc[ii] = model
+            table['model'].iloc[ii]   = model
             table['featureCols'].iloc[ii] = featureCols
-            table['kwargs'].iloc[ii] = kwargs
+            table['kwargs'].iloc[ii]  = kwargsUp
             table['sizeSet'].iloc[ii] = sizeSet
-            table['RMSE_train'].iloc[ii] = results['rmse_train']
-            table['RMSE_test'].iloc[ii]  = results['rmse_test']
+            table['rmse_train'].iloc[ii] = results['rmse_train']
+            table['rmse_test'].iloc[ii]  = results['rmse_test']
             table['corr_train'].iloc[ii] = results['corr_train'][0]
             table['corr_test'].iloc[ii]  = results['corr_test'][0]
             table['clf_train'].iloc[ii]  = results['clf_train']
             table['clf_test'].iloc[ii]   = results['clf_test']
+            table['coeffs'].iloc[ii]     = str( zip(featureCols, results['coeffs']) )
         self.table = table
 
     def saveRunResults(self, fnameOut):
@@ -355,8 +364,8 @@ class tableModels:
                           & (table['featureColsStr']==tableUniq['featureColsStr'].iloc[ii])
                           & (table['kwargsStr']==tableUniq['kwargsStr'].iloc[ii]) ]
             #TODO: Change to different shade of blue or green for each pass, to dissociate plots.
-            figax.plot(tableSm['sizeSet'], tableSm['RMSE_train'], 'g-')
-            figax.plot(tableSm['sizeSet'], tableSm['RMSE_test'], 'b-')
+            figax.plot(tableSm['sizeSet'], tableSm['rmse_train'], 'g-')
+            figax.plot(tableSm['sizeSet'], tableSm['rmse_test'], 'b-')
         figax.set_xlabel('size set')
         figax.set_ylabel('cost')
         figax.grid(True)
