@@ -204,56 +204,56 @@ class mlModel:
         from sklearn import ensemble
         from sklearn import naive_bayes
         if model == 'LinearRegression':
-            clf = linear_model.LinearRegression(**kwargs) # normalize arg can't be used
+            skModel = linear_model.LinearRegression(**kwargs) # normalize arg can't be used
         elif model == 'LogisticRegression':
-            clf = linear_model.LogisticRegression(**kwargs) # normalize arg can't be used ?
+            skModel = linear_model.LogisticRegression(**kwargs) # normalize arg can't be used ?
         elif model == 'SGDRegressor':
             # input : alpha, n_iter, eta0
-            clf = linear_model.SGDRegressor(**kwargs) # normalize arg can't be used.
+            skModel = linear_model.SGDRegressor(**kwargs) # normalize arg can't be used.
         elif model == 'SGDClassifier':
             # input : alpha, n_iter, eta0
-            clf = linear_model.SGDClassifier(**kwargs) # normalize arg can't be used. ?
+            skModel = linear_model.SGDClassifier(**kwargs) # normalize arg can't be used. ?
         elif model == 'Ridge':
             # input : alpha
-            clf = linear_model.Ridge(**kwargs) # can add normalize=True
+            skModel = linear_model.Ridge(**kwargs) # can add normalize=True
         elif model == 'RidgeClassifier':
             # input : alpha
-            clf = linear_model.RidgeClassifier(**kwargs) # can add normalize=True
+            skModel = linear_model.RidgeClassifier(**kwargs) # can add normalize=True
         elif model == 'BayesianRidge':
-            clf = linear_model.BayesianRidge(**kwargs) #
+            skModel = linear_model.BayesianRidge(**kwargs) #
         elif model == 'Perceptron':
-            clf = linear_model.Perceptron(**kwargs) #
+            skModel = linear_model.Perceptron(**kwargs) #
         elif model == 'GaussianNB':
-            clf = naive_bayes.GaussianNB(**kwargs) #
+            skModel = naive_bayes.GaussianNB(**kwargs) #
         elif model == 'MultinomialNB':
-            clf = naive_bayes.MultinomialNB(**kwargs) #
+            skModel = naive_bayes.MultinomialNB(**kwargs) #
         elif model == 'BernoulliNB':
-            clf = naive_bayes.BernoulliNB(**kwargs) #
+            skModel = naive_bayes.BernoulliNB(**kwargs) #
         elif model == 'DecisionTreeClassifier':
-            clf = sklearn.tree.DecisionTreeClassifier(**kwargs) #
+            skModel = sklearn.tree.DecisionTreeClassifier(**kwargs) #
         elif model == 'DecisionTreeRegressor':
-            clf = sklearn.tree.DecisionTreeRegressor(**kwargs) #
+            skModel = sklearn.tree.DecisionTreeRegressor(**kwargs) #
         elif model == 'RandomForestRegressor':
-            clf = ensemble.RandomForestRegressor(**kwargs) # args ? n_jobs (for par proc)
+            skModel = ensemble.RandomForestRegressor(**kwargs) # args ? n_jobs (for par proc)
         elif model == 'RandomForestClassifier':
-            clf = ensemble.RandomForestClassifier(**kwargs) # args ? n_jobs (for par proc)
+            skModel = ensemble.RandomForestClassifier(**kwargs) # args ? n_jobs (for par proc)
         elif model == 'GradientBoostingRegressor':
-            clf = ensemble.GradientBoostingRegressor(**kwargs) # args ? n_jobs (for par proc)
+            skModel = ensemble.GradientBoostingRegressor(**kwargs) # args ? n_jobs (for par proc)
         elif model == 'GradientBoostingClassifier':
-            clf = ensemble.GradientBoostingClassifier(**kwargs) # args ? n_jobs (for par proc)
+            skModel = ensemble.GradientBoostingClassifier(**kwargs) # args ? n_jobs (for par proc)
         else:
             print 'genModel: model not valid:',model
 
-        clf.fit(X=X_train, y=y_train)
-        #print 'coeff', clf.coef_
+        skModel.fit(X=X_train, y=y_train)
+        #print 'coeff', skModel.coef_
 
         tableProcDict = {'X_train':X_train, 'X_test':X_test, 'y_train':y_train, 'y_test':y_test}
         #TODO attach above var to self to not have to pass it, probably as self.dataProc
         #TODO: get kwargs out so it can be reported according to updated content.
-        return clf, tableProcDict, kwargs
-        #return clf
+        return skModel, tableProcDict, kwargs
+        #return skModel
 
-    def testModel(self, clf, tableProcDict, targetCol, targetNumCompare, testLabel):
+    def testModel(self, skModel, tableProcDict, targetCol, targetNumCompare, testLabel):
         """Handle model for linear regression, or for linear regression leading to classification (i.e. numerical features) and for pure classification (based on discrete labels only)."""
         table = self.table
         X_train=tableProcDict['X_train']
@@ -261,8 +261,8 @@ class mlModel:
         y_train=tableProcDict['y_train']
         y_test =tableProcDict['y_test']
 
-        yp_train=clf.predict(X_train) # putting X_train.as_matrix() doesn't change output type (i.e. pandas dataframe)
-        yp_test =clf.predict(X_test) # same
+        yp_train=skModel.predict(X_train) # putting X_train.as_matrix() doesn't change output type (i.e. pandas dataframe)
+        yp_test =skModel.predict(X_test) # same
 
         if self.model == 'LogisticRegression':
             # Noticed predict function outputs NaN for 1, but need to confirm it is always the case. TODO: check real NaNs are not interpreted as 1.
@@ -272,7 +272,7 @@ class mlModel:
         table[targetCol+'Pred']=pd.Series(np.hstack((yp_train,yp_test)), index=table.index) # for later inspection
         #table[targetCol+'Pred']=pd.Series(np.hstack((y_train,y_test)), index=table.index) # for debug
         
-        if hasattr(clf,'coef_'): coeffs = clf.coef_
+        if hasattr(skModel,'coef_'): coeffs = skModel.coef_
         else                   : coeffs = ['n/a']
         print 'test: %s, all table cols=%s'%(testLabel, sorted(table.columns))
         print 'test: %s, model=%s'%(testLabel, self.model)
@@ -319,30 +319,34 @@ class mlModelsCompare:
     """ Class for testing models under variour conditions (dataset sizes, solver, feature) and understand the impact of features (performance, convergence, overfitting, underfitting...).
     mlModel class might contain a model made of several models combined, so this one may not be the only one handling multiple models, but only one for testing only.
     """
+    # TODO: support running same model multiple times with different shuffling, to see the sensitivity to shuffling.
     def __init__(self, fnameIn=None, fcontent=None):
         self.baseModel = mlModel(fnameIn=fnameIn,fcontent=fcontent)
 
-    def testModels(self, model, featureCols, targetCol, targetNumCompare, setSizes, kwargs):
+    def testModels(self, model, featureCols, targetCol, targetNumCompare, splitRatios, setSizes, kwargs):
         """Takes raw values or list of values to generate every combinations."""
         # Goal is to rebuild plot such as http://www.astroml.org/sklearn_tutorial/practical.html
 
         # Generate all combinations
-        if type(setSizes)==int: setSizes=[setSizes] # to make it a list of one item
+        if type(splitRatios)==int: splitRatios=[splitRatios] # to make it a list of one item
+        if type(setSizes)==int : setSizes=[setSizes] # to make it a list of one item
         if setSizes==None      : setSizes=[-1] # to make it a list of one item
-        if type(model)==str   : model=[model] # same.
+        if type(model)==str    : model=[model] # same.
         if type(featureCols[0])==str: featureCols=[featureCols] # basic type expected is list of strings
-        if type(kwargs)==dict : kwargs=[kwargs] # same.
+        if type(kwargs)==dict  : kwargs=[kwargs] # same.
 
+        splitRatiosOrig = splitRatios[:]
         setSizesOrig = setSizes[:]
 
-        tests = [ [item] for item in setSizes] # first one
+        tests = [ [item] for item in splitRatios] # first one
+        tests = [ item1+[item2] for item1 in tests for item2 in setSizes]
         tests = [ item1+[item2] for item1 in tests for item2 in model]
         #tests = [ [item] for item in model]
         tests = [ item1+[item2] for item1 in tests for item2 in featureCols]
         tests = [ item1+[item2] for item1 in tests for item2 in kwargs] # sometimes duplicates setup for kwargs that will be discarded anyway. TODO: optimize.
     
         # Now iterate runs and fill table on params and results.
-        columns=['model','featureCols','kwargs','setSize','rmse_train', 'rmse_test',
+        columns=['model','featureCols','kwargs','splitRatio','setSize','rmse_train', 'rmse_test',
                  'corr_train', 'corr_test', 'clf_train', 'clf_test','coeffs']
         #dtype = np.dtype([('model','S20'),('featureCols','S20'),('kwargs','S20'),('setSize','i32'),('RMSE_train','f32'),('RMSE_test','f32')])
         #tableNp = np.empty((len(tests)*len(setSizesOrig), len(dtype)), dtype=dtype) #
@@ -350,39 +354,42 @@ class mlModelsCompare:
         table=pd.DataFrame({ 'model'       : 'n/a',
                              'featureCols' : 'n/a',
                              'kwargs'      : 'n/a',
+                             'splitRatio'  : np.zeros((len(tests)),dtype='f32'),
                              'setSize'     : np.zeros((len(tests)),dtype='int32'),
-                             'rmse_train'  : np.zeros((len(tests)),dtype='f32'),
-                             'rmse_test'   : np.zeros((len(tests)),dtype='f32'),
-                             'corr_train'  : np.zeros((len(tests)),dtype='f32'),
-                             'corr_test'   : np.zeros((len(tests)),dtype='f32'),
+                             'rmse_train'  : np.nan,
+                             'rmse_test'   : np.nan,
+                             'corr_train'  : np.nan,
+                             'corr_test'   : np.nan,
                              'clf_train'   : np.zeros((len(tests)),dtype='f32'),
                              'clf_test'    : np.zeros((len(tests)),dtype='f32'),
                              'coeffs'      : 'n/a',
                             }, columns=columns) # , columns=columns to force order.
  
         ii = -1
-        for (setSize, model, featureCols, kwargs) in tests:
+        for (splitRatio, setSize, model, featureCols, kwargs) in tests:
         #for (model, featureCols, kwargs) in tests:
           #for setSize in setSizesOrig:
             ii+=1
-            print '###----- item %s in %s'%(setSize, setSizesOrig)
+            #print '###----- item %s in %s'%(setSize, setSizesOrig)
+            print '###----- item %s in %s'%(splitRatio, splitRatiosOrig)
             print '### items:',setSize,model,featureCols,kwargs
             modelCur = mlModel(fcontent=self.baseModel.table)
 
-            modelCur.prepTable(featureCols, targetCol, setSize=setSize)
-            clf, tableProcDict, kwargsUp = modelCur.genModel(model, kwargs=kwargs.copy())
-            table2, results = modelCur.testModel(clf, tableProcDict, targetCol, targetNumCompare, setSize)
+            modelCur.prepTable(featureCols, targetCol, splitRatio=splitRatio, setSize=setSize, shuffle=True)
+            skModel, tableProcDict, kwargsUp = modelCur.genModel(model, kwargs=kwargs.copy())
+            table2, results = modelCur.testModel(skModel, tableProcDict, targetCol, targetNumCompare, splitRatio)
             #print results
             #print table.columns
             
-            table['model'].iloc[ii]   = model
+            table['model'].iloc[ii]       = model
             table['featureCols'].iloc[ii] = featureCols
-            table['kwargs'].iloc[ii]  = kwargsUp
-            table['setSize'].iloc[ii] = setSize
-            table['rmse_train'].iloc[ii] = results['rmse_train']
-            table['rmse_test'].iloc[ii]  = results['rmse_test']
-            table['corr_train'].iloc[ii] = results['corr_train'][0]
-            table['corr_test'].iloc[ii]  = results['corr_test'][0]
+            table['kwargs'].iloc[ii]      = kwargsUp
+            table['splitRatio'].iloc[ii]  = splitRatio
+            table['setSize'].iloc[ii]     = setSize
+            if results.get('rmse_train'): table['rmse_train'].iloc[ii] = results['rmse_train']
+            if results.get('rmse_test') : table['rmse_test'].iloc[ii]  = results['rmse_test']
+            if results.get('corr_train'): table['corr_train'].iloc[ii] = results['corr_train'][0]
+            if results.get('corr_test') : table['corr_test'].iloc[ii]  = results['corr_test'][0]
             table['clf_train'].iloc[ii]  = results['clf_train']
             table['clf_test'].iloc[ii]   = results['clf_test']
             table['coeffs'].iloc[ii]     = str( zip(featureCols, results['coeffs']) )
@@ -397,9 +404,9 @@ class mlModelsCompare:
             table.sort(['model'], inplace=True)
             table.to_csv(fnameOut) # , encoding='utf_32'
 
-    def plotRunResults(self):
+    def plotRunResults(self, plotRmse=True):
         table = self.table
-        # Plot data, individual pair of curves RMSE_train and RMSE_test vs setSize for each other combination of params.
+        # Plot data, individual pair of curves RMSE_train and RMSE_test vs splitRatio for each other combination of params.
         fig = plt.figure()
         figax = fig.add_subplot(111)
         # Need to convert table content to str for groupby function below (i.e. so it is hashable)
@@ -407,20 +414,24 @@ class mlModelsCompare:
         table['kwargsStr'] = table['kwargs'].apply(lambda x: str(x)) 
         table['featureColsStr'] = table['featureCols'].apply(lambda x: str(x))
         #table.to_csv('tempo/tableDEBUG.csv') ### DEBUG
-        # Find uniq combination of all params except 'setSize'.
+        # Find uniq combination of all params except 'splitRatio'.
         tableUniq = table[['modelTmp','featureColsStr','kwargsStr']].groupby(['modelTmp','featureColsStr','kwargsStr']).first()
         #tableUniq.to_csv('tempo/tableDEBUG2.csv') ### DEBUG
-        # Create a RMSE vs setSize plot (based on a tmp table) for each combination of unique other params.
+        # Create a RMSE vs splitRatio plot (based on a tmp table) for each combination of unique other params.
         for ii in np.arange(len(tableUniq)):
-            # Build table of every setSize datapoints for given other param combination.
+            # Build table of every splitRatio datapoints for given other param combination.
             tableSm = table[(table['modelTmp']==tableUniq['modelTmp'].iloc[ii])
                           & (table['featureColsStr']==tableUniq['featureColsStr'].iloc[ii])
                           & (table['kwargsStr']==tableUniq['kwargsStr'].iloc[ii]) ]
             #TODO: Change to different shade of blue or green for each pass, to dissociate plots.
-            figax.plot(tableSm['setSize'], tableSm['rmse_train'], 'g-')
-            figax.plot(tableSm['setSize'], tableSm['rmse_test'], 'b-')
-        figax.set_xlabel('size set')
-        figax.set_ylabel('cost')
+            if 'rmse_train' in tableSm.columns and 'rmse_test' in tableSm.columns and plotRmse:
+                figax.plot(tableSm['splitRatio'], tableSm['rmse_train'], 'g-')
+                figax.plot(tableSm['splitRatio'], tableSm['rmse_test'], 'b-')
+            else:
+                figax.plot(tableSm['splitRatio'], tableSm['clf_train'], 'g-')
+                figax.plot(tableSm['splitRatio'], tableSm['clf_test'], 'b-')
+        figax.set_xlabel('splitRatio')
+        figax.set_ylabel('cost or accuracy')
         figax.grid(True)
         plt.show()
 
@@ -515,7 +526,7 @@ def genPlot(table,xSource, ySource, xrange=[]):
 
 
 def genLinRegPlot(table,xSource, ySource, xrange=[]):
-    clf = linear_model.LinearRegression()
+    skModel = linear_model.LinearRegression()
     #XCols = ['nbUpdates', 'nbComments', 'nbBackers', 'nbFriendsFB', 'amountGoal'] # 'amountOver'
     XCols = xSource
     yCol = ySource
@@ -524,9 +535,9 @@ def genLinRegPlot(table,xSource, ySource, xrange=[]):
     table2 = table2.fillna(0) # just to deal with NaN values for now but TODO: should remove corresponding rows instead.
     #table2 = table2.dropna(axis=0) # axis=0-> drop row. axis=1-> drop col
     #print 'len after nan drop', len(table2)
-    clf.fit (X=table2[XCols][:, np.newaxis], y=table2[yCol])
+    skModel.fit (X=table2[XCols][:, np.newaxis], y=table2[yCol])
     x = table2[xSource]
-    y=clf.predict(x[:, np.newaxis])
+    y=skModel.predict(x[:, np.newaxis])
 
     fig = plt.figure()
     figax = fig.add_subplot(111)
@@ -546,7 +557,7 @@ def genLinRegPlot(table,xSource, ySource, xrange=[]):
 def outputTree(tree, fnameOut):
     from StringIO import StringIO
     out = StringIO()
-    out = sklearn.tree.export_graphviz(tree, out_file=out) # to get one tree out of the 10 in randomForest: clf.estimators_[0].
+    out = sklearn.tree.export_graphviz(tree, out_file=out) # to get one tree out of the 10 in randomForest: skModel.estimators_[0].
     #print out.getvalue()
     fh = open(fnameOut,'w') # fnameOut = 'tempo/tree.dot'
     fh.write(out.getvalue())
@@ -616,7 +627,7 @@ if __name__ == "__main__":
     #XCols = ['nbUpdates', 'nbComments', 'nbBackers', 'nbFriendsFB', 'amountGoal', lambda x: x**2] # 'amountOver'
     #XCols = ['nbUpdates', 'nbComments', 'nbBackers', 'nbFriendsFB', 'amountGoal', 'nbFriendsFB__nbFriendsFB'] # 'amountOver'
     #yCol = 'amountPledged'
-    #clf, table2, X_train, X_test, y_train, y_test = genModel(table, features=XCols, label=yCol, setSize=2500, n_iter=30)
+    #skModel, table2, X_train, X_test, y_train, y_test = genModel(table, features=XCols, label=yCol, setSize=2500, n_iter=30)
 
     # Full set ['nbUpdates', 'nbComments', 'nbBackers', 'nbFriendsFB', 'amountPledged', 'amountGoal', 'amountOver']
     featuresCatAll = ['gender', 'supCat', 'location', 'country', 'platform']
@@ -642,28 +653,28 @@ if __name__ == "__main__":
 
 """
 from sklearn import linear_model
-clf = linear_model.LinearRegression()
+skModel = linear_model.LinearRegression()
 X = [[0, 0], [1, 1], [2, 2]] # orig [[0, 0], [1, 1], [2, 2]]
 y = [0, 1, 2]
-clf.fit (X=X, y=y)
+skModel.fit (X=X, y=y)
 #LinearRegression(copy_X=True, fit_intercept=True, normalize=False)
-clf.coef_
+v.coef_
 #array([ 0.5,  0.5])
 
 fig = plt.figure()
 figax = fig.add_subplot(111)
 figax.plot(X, y, c='r')
-#figax.plot(x=X, y=clf.predict(X[:, np.newaxis]), c='b-') # X[:, np.newaxis] trick needed only if X is one dimensional as linear reg or predicte function requires X in 2D.
-figax.plot(X, clf.predict(X), c='b')
+#figax.plot(x=X, y=skModel.predict(X[:, np.newaxis]), c='b-') # X[:, np.newaxis] trick needed only if X is one dimensional as linear reg or predicte function requires X in 2D.
+figax.plot(X, skModel.predict(X), c='b')
 plt.show()
 
 from sklearn.linear_model import SGDClassifier
 X = [[0., 0.], [1., 1.]]
 y = [0, 1]
-clf = SGDClassifier(loss="hinge", penalty="l2")
-clf.fit(X, y)
+skModel = SGDClassifier(loss="hinge", penalty="l2")
+skModel.fit(X, y)
 #SGDClassifier(alpha=0.0001, class_weight=None, epsilon=0.1, eta0=0.0, fit_intercept=True, l1_ratio=0.15, learning_rate='optimal', loss='hinge', n_iter=5, n_jobs=1, penalty='l2', power_t=0.5, random_state=None, rho=None, shuffle=False, verbose=0, warm_start=False)
-clf.predict([[2., 2.]])
+skModel.predict([[2., 2.]])
 
 #x = table['nbUpdates']
 #y = table['nbComments']

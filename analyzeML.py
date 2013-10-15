@@ -66,12 +66,12 @@ features = ['nbUpdates', 'nbComments', 'nbBackers', 'nbFriendsFB', 'amountGoal',
 target = 'amountPledged'
 kwargs={} # setSize=2500, n_iter=30
 mlAnalysis.prepTable(features=features, target=target,setSize=2500)
-clf, tableProcDict, kwargUp = mlAnalysis.genModel( model='SGDRegressor', features=features, target=target, kwargs=kwargs)
+skModel, tableProcDict, kwargUp = mlAnalysis.genModel( model='SGDRegressor', features=features, target=target, kwargs=kwargs)
 
 # Test random forest.
 mlAnalysis.prepTable(features=features, target=target,setSize=2500)
-clf2, tableProcDict2, kwargUp = mlAnalysis.genModel( model='RandomForestRegressor', features=features, target=target, kwargs=kwargs)
-mu.outputTree(clf2.estimators_[0], 'tempo/oneTreeFromForest.dot') # to get one tree out of the 10.
+skModel2, tableProcDict2, kwargUp = mlAnalysis.genModel( model='RandomForestRegressor', features=features, target=target, kwargs=kwargs)
+mu.outputTree(skModel2.estimators_[0], 'tempo/oneTreeFromForest.dot') # to get one tree out of the 10.
 
 
 #----------- Run multiple ML algos ----------------------
@@ -84,12 +84,14 @@ features = ['nbFriendsFB', 'amountGoal', 'nbFriendsFB__nbFriendsFB', 'amountGoal
 
 target = 'amountPledged'
 
+splitRatios = [0.01, 0.03, 0.1, 0.3]
 #setSizes = [10, 30, 100, 300, 1000, 3000]
 #setSizes = [10, 20, 30, 50, 100, 300, 600, 1000, 2000, 3000, 10000, 30000]
 #setSizes = [10, 20, 30, 50, 100, 300, 600]
 #setSizes = np.arange(5000,10000,300) # 2 bumps to 1E14 with no shuffling.
 #setSizes = np.arange(500,2000,100)
-setSizes = np.arange(10,300,30)
+#setSizes = np.arange(10,300,30)
+setSizes = 10000
 #setSizes = np.concatenate((np.arange(10,300,30),np.array([3000,6000, 15000, 80000])))
 #setSizes = [10,300]
 
@@ -106,6 +108,6 @@ mlMultiTest = mu.mlModelsCompare(fnameIn)
 mlMultiTest.baseModel.shuffle()
 mlMultiTest.baseModel.removeOutliers('amountPledged', 50000)
 targetNumCompare='amountGoal'
-table = mlMultiTest.testModels(model, features, target, targetNumCompare, setSizes, kwargs)
+table = mlMultiTest.testModels(model, features, target, targetNumCompare, splitRatios, setSizes, kwargs)
 mlMultiTest.saveRunResults('tempo/table.csv')
 mlMultiTest.plotRunResults()
