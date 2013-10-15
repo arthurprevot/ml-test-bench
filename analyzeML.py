@@ -18,24 +18,24 @@ mlAnalysis = mu.tableModel(fnameIn) # just loads data file.
 #mlAnalysis.removeOutliers('amountPledged', 1000000)
 #mlAnalysis.removeOutliers('amountGoal', 1000000)
 if False: # to be switched manually
-    mlAnalysis.genScatter('amountPledged','amountGoal',  xrange=[-1000,11000], yrange=[-1000,11000])
-    mlAnalysis.genScatter('amountPledged','nbUpdates',   xrange=[-1000,11000], yrange=[-10,50])
-    mlAnalysis.genScatter('amountPledged','nbComments',  xrange=[-1000,11000], yrange=[-10,100])
-    mlAnalysis.genScatter('amountPledged','nbBackers',   xrange=[-1000,11000], yrange=[-10,1000])
-    mlAnalysis.genScatter('amountPledged','nbFriendsFB', xrange=[-1000,11000], yrange=[-10,1000])
-    fig, figax = mlAnalysis.genScatter('amountPledged','amountGoal')
+    mlAnalysis.genScatter('amountPledged','amountGoal','status',  xrange=[-1000,11000], yrange=[-1000,11000])
+    mlAnalysis.genScatter('amountPledged','nbUpdates','status',   xrange=[-1000,11000], yrange=[-10,50])
+    mlAnalysis.genScatter('amountPledged','nbComments','status',  xrange=[-1000,11000], yrange=[-10,100])
+    mlAnalysis.genScatter('amountPledged','nbBackers','status',   xrange=[-1000,11000], yrange=[-10,1000])
+    mlAnalysis.genScatter('amountPledged','nbFriendsFB','status', xrange=[-1000,11000], yrange=[-10,1000])
+    #fig, figax = mlAnalysis.genScatter('amountPledged','amountGoal','status')
 
-    mlAnalysis.genScatter('amountGoal','amountPledged',  xrange=[-1000,11000], yrange=[-1000,11000])
-    mlAnalysis.genScatter('nbUpdates','amountPledged',   xrange=[-10,50],   yrange=[-1000,11000])
-    mlAnalysis.genScatter('nbComments','amountPledged',  xrange=[-10,100],  yrange=[-1000,11000])
-    mlAnalysis.genScatter('nbBackers','amountPledged',   xrange=[-10,1000], yrange=[-1000,11000])
-    mlAnalysis.genScatter('nbFriendsFB','amountPledged', xrange=[-10,1000], yrange=[-1000,11000])
+    mlAnalysis.genScatter('amountGoal','amountPledged','status',  xrange=[-1000,11000], yrange=[-1000,11000])
+    mlAnalysis.genScatter('nbUpdates','amountPledged','status',   xrange=[-10,50],   yrange=[-1000,11000])
+    mlAnalysis.genScatter('nbComments','amountPledged','status',  xrange=[-10,100],  yrange=[-1000,11000])
+    mlAnalysis.genScatter('nbBackers','amountPledged','status',   xrange=[-10,1000], yrange=[-1000,11000])
+    mlAnalysis.genScatter('nbFriendsFB','amountPledged','status', xrange=[-10,1000], yrange=[-1000,11000])
 
-    mlAnalysis.genPlot('amountGoal','amountPledged')
-    mlAnalysis.genPlot('nbUpdates','amountPledged')
-    mlAnalysis.genPlot('nbComments','amountPledged')
-    mlAnalysis.genPlot('nbBackers','amountPledged')
-    mlAnalysis.genPlot('nbFriendsFB','amountPledged')
+    fig, figax = mlAnalysis.genPlot('amountGoal','amountPledged') # not plottable because of no unique and incrementable values in x.
+    mlAnalysis.genPlot('nbUpdates','amountPledged') # same
+    mlAnalysis.genPlot('nbComments','amountPledged') # same
+    mlAnalysis.genPlot('nbBackers','amountPledged') # same
+    mlAnalysis.genPlot('nbFriendsFB','amountPledged') # same
 
     mlAnalysis.genPlot('amountGoal','amountPledged',  xrange=[-1000,11000])
     mlAnalysis.genPlot('nbUpdates','amountPledged',   xrange=[-10,50])
@@ -55,6 +55,7 @@ if False: # to be switched manually
     mlAnalysis.genLinRegPlot('nbComments','amountPledged',  xrange=[-10,100])
     mlAnalysis.genLinRegPlot('nbBackers','amountPledged',   xrange=[-10,1000])
     mlAnalysis.genLinRegPlot('nbFriendsFB','amountPledged', xrange=[-10,1000])
+    #sys.exit()
 
 
 #----------- Run one ML algo ----------------------
@@ -70,13 +71,8 @@ clf, tableProcDict, kwargUp = mlAnalysis.genModel( model='SGDRegressor', feature
 # Test random forest.
 mlAnalysis.filterTrainVsTest(features=features, target=target,sizeTrainingSet=2500)
 clf2, tableProcDict2, kwargUp = mlAnalysis.genModel( model='RandomForestRegressor', features=features, target=target, kwargs=kwargs)
-from StringIO import StringIO
-out = StringIO()
-out = sklearn.tree.export_graphviz(clf2.estimators_[0], out_file=out) # to get one tree out of the 10.
-#print out.getvalue()
-fh = open('tempo/oneTreeFromForest.dot','w')
-fh.write(out.getvalue())
-fh.close()
+mu.outputTree(clf2.estimators_[0], 'tempo/oneTreeFromForest.dot') # to get one tree out of the 10.
+
 
 #----------- Run multiple ML algos ----------------------
 print '#---- Run multiple ML algo ----'

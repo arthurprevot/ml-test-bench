@@ -8,10 +8,12 @@ import os
 import re
 import pandas as pd
 import scipy as sp
+import sklearn
 from sklearn import linear_model
 from sklearn import preprocessing
 import matplotlib as ml
-from pylab import plt
+#from pylab import plt
+import matplotlib.pyplot as plt
 #from matplotlib import *
 from matplotlib.markers import MarkerStyle; mkStyles = MarkerStyle()
 
@@ -22,6 +24,8 @@ class tableModel:
             self.dataOrig = fcontent
         elif fnameIn:
             self.dataOrig = pd.read_csv(fnameIn)
+        #elif fnameInFeatures and fnameInTarget:
+        #    pass #### TBD
         else:
             print 'pb with input to tableModel class, fnameIn=%s, fcontent=%s'%(fnameIn, fcontent)
         self.dataCur = self.dataOrig.copy()
@@ -37,16 +41,16 @@ class tableModel:
 
     def shuffle(self):
         table = self.dataCur.reindex(np.random.permutation(self.dataCur.index))
-        #return table
+        return table
 
-    def genScatter(self,xSource,ySource, xrange=None, yrange=None):
+    def genScatter(self,xSource,ySource, colGroup=None, xrange=None, yrange=None, fnameOut='scatter.png'):
         table = self.dataCur
-        fig, figax = genScatter(table,xSource,ySource, xrange=xrange, yrange=yrange)
+        fig, figax = genScatter(table,xSource,ySource,colGroup, xrange=xrange, yrange=yrange, fnameOut=fnameOut)
         return fig, figax
 
-    def genHist(self,xSource):
+    def genHist(self,xSource, fnameOut='hist.png'):
         table = self.dataCur
-        fig, figax = genHist(table,xSource=xSource)
+        fig, figax = genHist(table,xSource=xSource,fnameOut=fnameOut)
         return fig, figax
 
     def genPlot(self,xSource, ySource, xrange=[]):
@@ -58,6 +62,10 @@ class tableModel:
         table = self.dataCur
         fig, figax = genLinRegPlot(table,xSource, ySource, xrange=xrange)
         return fig, figax
+
+    def computeCorrNbs(self, label1, label2):
+        table = self.dataCur
+        return computeCorrNbs(table,label1, label2)
 
 
     def clfPredAccuracy(self, targetCol, predTargetCol, runOn='all'):
@@ -71,14 +79,14 @@ class tableModel:
         return float(totGood)/len(table)
 
 
-    def filterTrainVsTest(self, features=[], target='n/a',sizeTrainingSet=None):
+    def filterTrainVsTest(self, features=[], target='n/a',splitRatio=0.66, sizeTrainingSet=None, shuffle=False):
         table = self.dataCur
 
         # Get features
         colsOrig = table.columns
         featuresExisting = [item for item in features if (type(item)==str and item in colsOrig)]
         featuresToGen    = [item for item in features if (type(item)!=str or item not in colsOrig)]
-        print 'featuresExisting: ',featuresExisting, ', featuresToGen: ',featuresToGen
+        print 'featuresExisting: ',featuresExisting, ', featuresToGen (if any): ',featuresToGen
         
         # ---------- Reduce table ----------
         table = table[featuresExisting+[target]]
@@ -88,7 +96,6 @@ class tableModel:
         #print 'len before nan drop', len(table)
         #table = table.fillna(0) # just to deal with NaN values for now but TODO: should remove corresponding rows instead.
         table = table.dropna(axis=0) # axis=0-> drop row. axis=1-> drop col
-        table['otherIndex']=pd.Series(np.arange(len(table)), index=table.index)
         #table = table[np.isnan(table['nbFriendsFB']) == False] # works too if we know all potential NaNs are only in 'nbFriendsFB'
         #print 'len after nan drop', len(table)
 
@@ -127,10 +134,13 @@ class tableModel:
         #print 'List features 2: ', table.columns, ", note: 'otherIndex' and 'isTrainVsTest' added in filterTrainVsTest."
 
         # ---------- Shuffle (if not already done before) ----------
-        #table = table.reindex(np.random.permutation(table.index)) # TODO: try to get always same randome permutation, to compare between shots.
+        if shuffle:
+            # Note: to have same shuffle across test: need to put shuffle=False and do shuffle before serie of tests.
+            table = table.reindex(np.random.permutation(table.index))
 
         # ---------- Mark Train vs Test sets ----------
-        splitSp = len(table)*2/3
+        splitSp = len(table)*splitRatio
+        table['otherIndex']=pd.Series(np.arange(len(table)), index=table.index) # to have clean index, sequential, as opposed to potentially shuffle one.
         table['isTrainVsTest']=table['otherIndex'] < splitSp # used by other functions later, and for later inspection.
         table.__delitem__('otherIndex')
         self.dataCur = table
@@ -151,6 +161,7 @@ class tableModel:
 
     def genModel(self, model, features=None, target=None, kwargs={}):
         table = self.dataCur
+        self.model = model
 
         # Get features and target col names (best to use these attached to class, i.e. set by filterTrainVsTest, as it is consistent with col used for normalizing.) TODO: check cases where good to override.
         if features == None: features = self.featureCols
@@ -187,18 +198,45 @@ class tableModel:
         # Run models
         from sklearn import linear_model
         from sklearn import ensemble
+        from sklearn import naive_bayes
         if model == 'LinearRegression':
-            clf = linear_model.LinearRegression() # normalize arg can't be used
+            clf = linear_model.LinearRegression(**kwargs) # normalize arg can't be used
+        elif model == 'LogisticRegression':
+            clf = linear_model.LogisticRegression(**kwargs) # normalize arg can't be used ?
         elif model == 'SGDRegressor':
             # input : alpha, n_iter, eta0
             clf = linear_model.SGDRegressor(**kwargs) # normalize arg can't be used.
+        elif model == 'SGDClassifier':
+            # input : alpha, n_iter, eta0
+            clf = linear_model.SGDClassifier(**kwargs) # normalize arg can't be used. ?
         elif model == 'Ridge':
             # input : alpha
             clf = linear_model.Ridge(**kwargs) # can add normalize=True
-        elif model == 'RandomForestClassifier':
-            clf = ensemble.RandomForestClassifier(**kwargs) # args ? n_jobs (for par proc)
+        elif model == 'RidgeClassifier':
+            # input : alpha
+            clf = linear_model.RidgeClassifier(**kwargs) # can add normalize=True
+        elif model == 'BayesianRidge':
+            clf = linear_model.BayesianRidge(**kwargs) #
+        elif model == 'Perceptron':
+            clf = linear_model.Perceptron(**kwargs) #
+        elif model == 'GaussianNB':
+            clf = naive_bayes.GaussianNB(**kwargs) #
+        elif model == 'MultinomialNB':
+            clf = naive_bayes.MultinomialNB(**kwargs) #
+        elif model == 'BernoulliNB':
+            clf = naive_bayes.BernoulliNB(**kwargs) #
+        elif model == 'DecisionTreeClassifier':
+            clf = sklearn.tree.DecisionTreeClassifier(**kwargs) #
+        elif model == 'DecisionTreeRegressor':
+            clf = sklearn.tree.DecisionTreeRegressor(**kwargs) #
         elif model == 'RandomForestRegressor':
             clf = ensemble.RandomForestRegressor(**kwargs) # args ? n_jobs (for par proc)
+        elif model == 'RandomForestClassifier':
+            clf = ensemble.RandomForestClassifier(**kwargs) # args ? n_jobs (for par proc)
+        elif model == 'GradientBoostingRegressor':
+            clf = ensemble.GradientBoostingRegressor(**kwargs) # args ? n_jobs (for par proc)
+        elif model == 'GradientBoostingClassifier':
+            clf = ensemble.GradientBoostingClassifier(**kwargs) # args ? n_jobs (for par proc)
         else:
             print 'genModel: model not valid:',model
 
@@ -219,21 +257,27 @@ class tableModel:
         y_train=tableProcDict['y_train']
         y_test =tableProcDict['y_test']
 
-        yp_train=clf.predict(X_train)
-        yp_test =clf.predict(X_test)
+        yp_train=clf.predict(X_train) # putting X_train.as_matrix() doesn't change output type (i.e. pandas dataframe)
+        yp_test =clf.predict(X_test) # same
+
+        if self.model == 'LogisticRegression':
+            # Noticed predict function outputs NaN for 1, but need to confirm it is always the case. TODO: check real NaNs are not interpreted as 1.
+            yp_train.fillna(value=1, inplace=True)
+            yp_test.fillna(value=1, inplace=True)
 
         table[targetCol+'Pred']=pd.Series(np.hstack((yp_train,yp_test)), index=table.index) # for later inspection
         #table[targetCol+'Pred']=pd.Series(np.hstack((y_train,y_test)), index=table.index) # for debug
+        
+        if hasattr(clf,'coef_'): coeffs = clf.coef_
+        else                   : coeffs = ['n/a']
+        print 'test: %s, all table cols=%s'%(testLabel, sorted(table.columns))
+        print 'test: %s, model=%s'%(testLabel, self.model)
+        print 'test: %s, features cols=%s'%(testLabel, sorted(X_train.columns))
+        print 'test: %s, features coefs=%s'%(testLabel, coeffs) # randomForest doesn't have it.
 
-        if table[targetCol].dtype.name == 'float64': # assuming table[targetCol+'Pred'] is also 'float64'
+        if table[targetCol].dtype.name == 'float64' and targetNumCompare != None: # assuming table[targetCol+'Pred'] is also 'float64'
             #cost_train = np.sqrt(np.mean((yp_train-y_train)**2)) # same as rmse
             #cost_test  = np.sqrt(np.mean((yp_test-y_test)**2)) # same as rmse
-            print 'test: %s, all table cols=%s'%(testLabel, sorted(table.columns))
-            print 'test: %s, features cols=%s'%(testLabel, sorted(X_train.columns))
-            if hasattr(clf,'coef_'): coeffs = clf.coef_
-            else                   : coeffs = ['n/a']
-            print 'test: %s, features coefs=%s'%(testLabel, coeffs) # randomForest doesn't have it.
-
             rmse_train = ml.mlab.rms_flat(yp_train-y_train)
             corr_train = sp.stats.pearsonr(yp_train, y_train)
             rmse_test = ml.mlab.rms_flat(yp_test-y_test)
@@ -248,17 +292,20 @@ class tableModel:
             clf_train = self.clfPredAccuracy('madeIt', 'madeItPred', runOn='train')
             clf_test  = self.clfPredAccuracy('madeIt', 'madeItPred', runOn='test')
             print 'test: %s, clf_train=%s, clf_test=%s'%(testLabel, clf_train, clf_test)
+            results = {'rmse_train':rmse_train, 'rmse_test':rmse_test,
+                       'corr_train':corr_train, 'corr_test':corr_test,
+                       'clf_train':clf_train  , 'clf_test':clf_test,
+                       'coeffs':coeffs}
+
         else:
             clf_train = self.clfPredAccuracy(targetCol, targetCol+'Pred', runOn='train')
             clf_test  = self.clfPredAccuracy(targetCol, targetCol+'Pred', runOn='test')
             print 'test: %s, clf_train=%s, clf_test=%s'%(testLabel, clf_train, clf_test)
+            results = {'clf_train':clf_train  , 'clf_test':clf_test,
+                       'coeffs':coeffs}
 
-        #fnameOut='data/crowdfunding_5_ML_nbIter_%s.csv'%(testLabel) # may be overwritten below
-        #table.to_csv(fnameOut)
-        results = {'rmse_train':rmse_train, 'rmse_test':rmse_test,
-                   'corr_train':corr_train, 'corr_test':corr_test,
-                   'clf_train':clf_train  , 'clf_test':clf_test,
-                   'coeffs':coeffs}
+        #fnameOut='data/debugML_nbIter_%s.csv'%(testLabel) # DEBUG only
+        #table.to_csv(fnameOut) # DEBUG only
         return table, results
 
     # testModels was put in other class. Should consider having methodes to deal with building a model based on multiple models (using bagging).
@@ -377,54 +424,37 @@ class tableModels:
 
 #-------------- Serie of util functions --------------------------
  
-def genScatter(table,xSource,ySource, xrange=None, yrange=None):
-    statusRepr = {'success':{'color':'g'},
-                  'failure':{'color':'r'},
-                  #'other':{'color':'grey'}
-                  }
-    categsRepr = mkStyles.filled_markers
-    # TODO: To be made generic
-    categs = table.groupby(['supCat']).mean().index.tolist()
+def genScatter(table,xSource,ySource, colGroup=None, xrange=None, yrange=None, fnameOut='scatter.png'):
+    #statusRepr = {'success':{'color':'g'},
+    #              'failure':{'color':'r'},
+    #              #'other':{'color':'grey'}}
+    colrList = ['g','r','b']
+    #categsRepr = mkStyles.filled_markers
+    if colGroup == None:
+        categs = [1]
+    else:
+        categs = table.groupby([colGroup]).mean().index.tolist()
 
     fig = plt.figure()
     #figax = fig.add_subplot(121) # grid 1*2, and go in 1st box
     figax = fig.add_subplot(111) # grid 1*1, and go in 1st box
     figax.set_xlabel(xSource)
     figax.set_ylabel(ySource)
-    #xSuccess = table[xSource][table['status']=='success']
-    #ySuccess = table[ySource][table['status']=='success']
-    #xFailure = table[xSource][table['status']=='failure']
-    #yFailure = table[ySource][table['status']=='failure']
-    #xOther   = table[xSource][(table['status']!='failure') & (table['status']!='success')]
-    #yOther   = table[ySource][(table['status']!='failure') & (table['status']!='success')]
-    #figax.scatter(x=xSuccess,y=ySuccess, c='g')
-    #figax.scatter(x=xFailure,y=yFailure, c='r')
-    #figax.scatter(x=xOther,y=yOther, c='grey')
-    #for item in statusRepr.keys(): # Not good order, leads to ['failure', 'success'] order, we want red on top.
-    # TODO: To be made generic
-    for item in ['success', 'failure']: # should be connected to statusRepr.keys()
-        colorMark = statusRepr[item]['color']
-        #xSuccess = table[xSource][table['status']==item]
-        #ySuccess = table[ySource][table['status']==item]
-        tbFilt = table[table['status']==item]
+    for ii, item in enumerate(categs): # should be connected to statusRepr.keys()
+        #TODO: change selection of color to assign green and red to success or failure or to 1 or 0, if two groups only.
+        #colorMark = statusRepr[item]['color']
+        colorMark = colrList[np.mod(ii,len(colrList))] # mod to loop through list of predef colors.
+        if colGroup == None: # if section can be removed by used groupby groups and iterating through them.
+            tbFilt = table
+        else:
+            tbFilt = table[table[colGroup]==item]
         xFilt = tbFilt[xSource]
         yFilt = tbFilt[ySource]
         figax.scatter(x=xFilt,y=yFilt, marker='o', c=colorMark)
-        #print 'Category: %s, marker: %s, color: %s'%(item2, categsRepr[ii%13], colorMark)
-        #ii=-1
-        #for item2 in categs:
-        #    ii+=1
-        #    tbFilt = table[(table['status']==item) & (table['supCat']==item2)]
-        #    xFilt = tbFilt[xSource]
-        #    yFilt = tbFilt[ySource]
-        #    figax.scatter(x=xFilt,y=yFilt, marker=categsRepr[ii%13], c=colorMark)
-        #    print 'Category: %s, marker: %s, color: %s'%(item2, categsRepr[ii%13], colorMark)
     #figax.set_xscale('log')
     #figax.set_yscale('log')
-
     if xrange: figax.set_xlim(xrange)
     if yrange: figax.set_ylim(yrange)
-
 #    figax2 = fig.add_subplot(122) # grid 1*2, and go in 2nd box
 #    figax2.set_xlabel(xSource)
 #    figax2.set_ylabel(ySource)
@@ -434,10 +464,11 @@ def genScatter(table,xSource,ySource, xrange=None, yrange=None):
 #    figax2.set_xlim([-1000,11000])
 #    figax2.set_ylim(yrange)
 
+    if fnameOut!=None: plt.savefig(fnameOut, format='png') # fnameOut="test.png"
     plt.show()
     return fig, figax
 
-def genHist(table,xSource):
+def genHist(table,xSource,fnameOut='hist.png'):
     fig = plt.figure()
     figax = fig.add_subplot(111)
     #xSource='amountPledged'
@@ -446,13 +477,14 @@ def genHist(table,xSource):
     n, bins, patches = figax.hist(x=test, bins=10000, facecolor='green', histtype='stepfilled', log=True) # log=True
     figax.set_xlabel(xSource)
     figax.set_ylabel('Nb Occurences')
-    figax.set_xscale('log')
+    #figax.set_xscale('log')
     #figax.set_yscale('log')
     #figax.semilogy()
     #ax.set_title(r'$\mathrm{Histogram\ of\ IQ:}\ \mu=100,\ \sigma=15$')
     #ax.set_xlim(40, 160)
     #ax.set_ylim(0, 0.03)
     figax.grid(True)
+    if fnameOut!=None: plt.savefig(fnameOut, format='png') # fnameOut="test.png"
     plt.show()
     return fig, figax
 
@@ -461,6 +493,8 @@ def genPlot(table,xSource, ySource, xrange=[]):
     figax = fig.add_subplot(111)
     #xSource='amountPledged'
     #test = [item for item in table[xSource] if not np.isnan(item)] # could use maskes.
+    #print table[xSource]
+    #print table[ySource]
     figax.plot(x=table[xSource], y=table[ySource])
     figax.set_xlabel(xSource)
     figax.set_ylabel(ySource)
@@ -502,6 +536,23 @@ def genLinRegPlot(table,xSource, ySource, xrange=[]):
     figax.grid(True)
     plt.show()
     return fig, figax
+
+def outputTree(tree, fnameOut):
+    from StringIO import StringIO
+    out = StringIO()
+    out = sklearn.tree.export_graphviz(tree, out_file=out) # to get one tree out of the 10 in randomForest: clf.estimators_[0].
+    #print out.getvalue()
+    fh = open(fnameOut,'w') # fnameOut = 'tempo/tree.dot'
+    fh.write(out.getvalue())
+    fh.close()
+
+def computeCorrNbs(table, label1, label2):
+    rmse_train = ml.mlab.rms_flat(table[label1]-table[label2])
+    corr_train = sp.stats.pearsonr(table[label1], table[label2])
+    results = {'rmse':rmse, 'corr':corr}
+    #print results
+    return results
+
 
 
 if __name__ == "__main__":
