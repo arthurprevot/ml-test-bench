@@ -64,12 +64,12 @@ print '#---- Run one ML algo ----'
 #features = ['nbUpdates', 'nbComments', 'nbBackers', 'nbFriendsFB', 'amountGoal', lambda x: x**2] # 'amountOver'
 features = ['nbUpdates', 'nbComments', 'nbBackers', 'nbFriendsFB', 'amountGoal', 'nbFriendsFB__nbFriendsFB'] # 'amountOver'
 target = 'amountPledged'
-kwargs={} # sizeTrainingSet=2500, n_iter=30
-mlAnalysis.filterTrainVsTest(features=features, target=target,sizeTrainingSet=2500)
+kwargs={} # setSize=2500, n_iter=30
+mlAnalysis.prepTable(features=features, target=target,setSize=2500)
 clf, tableProcDict, kwargUp = mlAnalysis.genModel( model='SGDRegressor', features=features, target=target, kwargs=kwargs)
 
 # Test random forest.
-mlAnalysis.filterTrainVsTest(features=features, target=target,sizeTrainingSet=2500)
+mlAnalysis.prepTable(features=features, target=target,setSize=2500)
 clf2, tableProcDict2, kwargUp = mlAnalysis.genModel( model='RandomForestRegressor', features=features, target=target, kwargs=kwargs)
 mu.outputTree(clf2.estimators_[0], 'tempo/oneTreeFromForest.dot') # to get one tree out of the 10.
 
@@ -84,18 +84,18 @@ features = ['nbFriendsFB', 'amountGoal', 'nbFriendsFB__nbFriendsFB', 'amountGoal
 
 target = 'amountPledged'
 
-#testCrit = [10, 30, 100, 300, 1000, 3000] # for sizeTrainingSet
-#testCrit = [10, 20, 30, 50, 100, 300, 600, 1000, 2000, 3000, 10000, 30000] # for sizeTrainingSet
-#testCrit = [10, 20, 30, 50, 100, 300, 600] # for sizeTrainingSet
-#testCrit = np.arange(5000,10000,300) # for sizeTrainingSet # 2 bumps to 1E14 with no shuffling.
-#testCrit = np.arange(500,2000,100) # for sizeTrainingSet
-testCrit = np.arange(10,300,30) # for sizeTrainingSet
-#testCrit = np.concatenate((np.arange(10,300,30),np.array([3000,6000, 15000, 80000]))) # for sizeTrainingSet
-#testCrit = [10,300] # for sizeTrainingSet
+#setSizes = [10, 30, 100, 300, 1000, 3000]
+#setSizes = [10, 20, 30, 50, 100, 300, 600, 1000, 2000, 3000, 10000, 30000]
+#setSizes = [10, 20, 30, 50, 100, 300, 600]
+#setSizes = np.arange(5000,10000,300) # 2 bumps to 1E14 with no shuffling.
+#setSizes = np.arange(500,2000,100)
+setSizes = np.arange(10,300,30)
+#setSizes = np.concatenate((np.arange(10,300,30),np.array([3000,6000, 15000, 80000])))
+#setSizes = [10,300]
 
 #model = ['Ridge','LinearRegression','SGDRegressor','Ridge','RandomForestRegressor'] # Full
 #model = ['Ridge', 'LinearRegression', 'SGDRegressor' ] #, 'SGDRegressor','Ridge'
-model = ['Ridge', 'RandomForestRegressor' ] #, 'LinearRegression' is terrible, makes test data go to E17, probably because it is analytical solution and I have correlated features (rank 0) # 'SGDRegressor' goes wild after about sizeSet of 3K
+model = ['Ridge', 'RandomForestRegressor' ] #, 'LinearRegression' is terrible, makes test data go to E17, probably because it is analytical solution and I have correlated features (rank 0) # 'SGDRegressor' goes wild after about setSize of 3K
 
 # alpha=0.0000000001, n_iter=100
 #kwargs = {'alpha':0.001, 'n_iter':100, 'eta0':0.001, 'shuffle':False, 'removeOutliers':True} # eta0=0.01 default
@@ -106,6 +106,6 @@ mlMultiTest = mu.mlModelsCompare(fnameIn)
 mlMultiTest.baseModel.shuffle()
 mlMultiTest.baseModel.removeOutliers('amountPledged', 50000)
 targetNumCompare='amountGoal'
-table = mlMultiTest.testModels(model, features, target, targetNumCompare, testCrit, kwargs)
+table = mlMultiTest.testModels(model, features, target, targetNumCompare, setSizes, kwargs)
 mlMultiTest.saveRunResults('tempo/table.csv')
 mlMultiTest.plotRunResults()

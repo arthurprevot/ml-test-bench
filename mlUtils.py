@@ -41,7 +41,7 @@ class mlModel:
         return table
 
     def shuffle(self):
-        """Shuffle also available as part of filterTrainVsTest or of mlModels."""
+        """Shuffle also available as part of prepTable or of mlModels."""
         table = self.table.reindex(np.random.permutation(self.table.index))
         return table
 
@@ -81,7 +81,7 @@ class mlModel:
         return float(totGood)/len(table)
 
 
-    def filterTrainVsTest(self, features=[], target='n/a',splitRatio=0.66, sizeTrainingSet=None, shuffle=False):
+    def prepTable(self, features=[], target='n/a',splitRatio=0.66, setSize=None, shuffle=False):
         """Takes care of cleaning table, adding features if required, shuffle if required and splitting the table in train or test sets."""
         table = self.table
 
@@ -102,8 +102,8 @@ class mlModel:
         #table = table[np.isnan(table['nbFriendsFB']) == False] # works too if we know all potential NaNs are only in 'nbFriendsFB'
         #print 'len after nan drop', len(table)
 
-        if sizeTrainingSet!=None:
-            table = table[:sizeTrainingSet] # assuming dropna above didn't remove too much.
+        if setSize!=None:
+            table = table[:setSize] # assuming dropna above didn't remove too much.
             #table.to_csv('data/crowdfunding_5_ML_nbIterLast.csv') # debug
 
         # ---------- Gen new features  ----------
@@ -134,7 +134,7 @@ class mlModel:
             # Then get rid of orig col
             table.__delitem__(item)
             featuresExisting.remove(item)
-        #print 'List features 2: ', table.columns, ", note: 'otherIndex' and 'isTrainVsTest' added in filterTrainVsTest."
+        #print 'List features 2: ', table.columns, ", note: 'otherIndex' and 'isTrainVsTest' added in prepTable."
 
         # ---------- Shuffle (if not already done before) ----------
         if shuffle:
@@ -149,7 +149,7 @@ class mlModel:
         self.table = table
         self.featureCols = featuresExisting
         self.targetCol = target
-        #print 'List features 2: ', table.columns, ", note: 'isTrainVsTest' added in filterTrainVsTest." # and 'otherIndex'
+        #print 'List features 2: ', table.columns, ", note: 'isTrainVsTest' added in prepTable." # and 'otherIndex'
         #return table
 
     def removeInvalidKwargs(self, model, kwargs):
@@ -167,7 +167,7 @@ class mlModel:
         table = self.table
         self.model = model
 
-        # Get features and target col names (best to use these attached to class, i.e. set by filterTrainVsTest, as it is consistent with col used for normalizing.) TODO: check cases where good to override.
+        # Get features and target col names (best to use these attached to class, i.e. set by prepTable, as it is consistent with col used for normalizing.) TODO: check cases where good to override.
         if features == None: features = self.featureCols
         if target   == None: target   = self.targetCol
 
@@ -322,61 +322,63 @@ class mlModelsCompare:
     def __init__(self, fnameIn=None, fcontent=None):
         self.baseModel = mlModel(fnameIn=fnameIn,fcontent=fcontent)
 
-    def testModels(self, model, featureCols, targetCol, targetNumCompare, sizeSet, kwargs):
+    def testModels(self, model, featureCols, targetCol, targetNumCompare, setSizes, kwargs):
         """Takes raw values or list of values to generate every combinations."""
         # Goal is to rebuild plot such as http://www.astroml.org/sklearn_tutorial/practical.html
-        sizeSetOrig = sizeSet[:]
 
         # Generate all combinations
-        if type(sizeSet)==int: sizeSet=[sizeSet] # to make it a list of one item
-        if type(model)==str: model=[model] # same.
+        if type(setSizes)==int: setSizes=[setSizes] # to make it a list of one item
+        if setSizes==None      : setSizes=[-1] # to make it a list of one item
+        if type(model)==str   : model=[model] # same.
         if type(featureCols[0])==str: featureCols=[featureCols] # basic type expected is list of strings
-        if type(kwargs)==dict: kwargs=[kwargs] # same.
+        if type(kwargs)==dict : kwargs=[kwargs] # same.
 
-        tests = [ [item] for item in sizeSet] # first one
+        setSizesOrig = setSizes[:]
+
+        tests = [ [item] for item in setSizes] # first one
         tests = [ item1+[item2] for item1 in tests for item2 in model]
         #tests = [ [item] for item in model]
         tests = [ item1+[item2] for item1 in tests for item2 in featureCols]
         tests = [ item1+[item2] for item1 in tests for item2 in kwargs] # sometimes duplicates setup for kwargs that will be discarded anyway. TODO: optimize.
     
         # Now iterate runs and fill table on params and results.
-        columns=['model','featureCols','kwargs','sizeSet','rmse_train', 'rmse_test',
+        columns=['model','featureCols','kwargs','setSize','rmse_train', 'rmse_test',
                  'corr_train', 'corr_test', 'clf_train', 'clf_test','coeffs']
-        #dtype = np.dtype([('model','S20'),('featureCols','S20'),('kwargs','S20'),('sizeSet','i32'),('RMSE_train','f32'),('RMSE_test','f32')])
-        #tableNp = np.empty((len(tests)*len(sizeSetOrig), len(dtype)), dtype=dtype) #
+        #dtype = np.dtype([('model','S20'),('featureCols','S20'),('kwargs','S20'),('setSize','i32'),('RMSE_train','f32'),('RMSE_test','f32')])
+        #tableNp = np.empty((len(tests)*len(setSizesOrig), len(dtype)), dtype=dtype) #
         #table=pd.DataFrame(tableNp, columns=columns) # columns=columns # didn't work, not sure why.
         table=pd.DataFrame({ 'model'       : 'n/a',
                              'featureCols' : 'n/a',
                              'kwargs'      : 'n/a',
-                             'sizeSet'     : np.zeros((len(tests)),dtype='int32'),
+                             'setSize'     : np.zeros((len(tests)),dtype='int32'),
                              'rmse_train'  : np.zeros((len(tests)),dtype='f32'),
                              'rmse_test'   : np.zeros((len(tests)),dtype='f32'),
                              'corr_train'  : np.zeros((len(tests)),dtype='f32'),
                              'corr_test'   : np.zeros((len(tests)),dtype='f32'),
-                             'clf_train'  : np.zeros((len(tests)),dtype='f32'),
-                             'clf_test'   : np.zeros((len(tests)),dtype='f32'),
+                             'clf_train'   : np.zeros((len(tests)),dtype='f32'),
+                             'clf_test'    : np.zeros((len(tests)),dtype='f32'),
                              'coeffs'      : 'n/a',
                             }, columns=columns) # , columns=columns to force order.
  
         ii = -1
-        for (sizeSet, model, featureCols, kwargs) in tests:
+        for (setSize, model, featureCols, kwargs) in tests:
         #for (model, featureCols, kwargs) in tests:
-          #for sizeSet in sizeSetOrig:
+          #for setSize in setSizesOrig:
             ii+=1
-            print '###----- item %s in %s'%(sizeSet, sizeSetOrig)
-            print '### items:',sizeSet,model,featureCols,kwargs
+            print '###----- item %s in %s'%(setSize, setSizesOrig)
+            print '### items:',setSize,model,featureCols,kwargs
             modelCur = mlModel(fcontent=self.baseModel.table)
 
-            modelCur.filterTrainVsTest(featureCols, targetCol, sizeTrainingSet=sizeSet)
+            modelCur.prepTable(featureCols, targetCol, setSize=setSize)
             clf, tableProcDict, kwargsUp = modelCur.genModel(model, kwargs=kwargs.copy())
-            table2, results = modelCur.testModel(clf, tableProcDict, targetCol, targetNumCompare, sizeSet)
+            table2, results = modelCur.testModel(clf, tableProcDict, targetCol, targetNumCompare, setSize)
             #print results
             #print table.columns
             
             table['model'].iloc[ii]   = model
             table['featureCols'].iloc[ii] = featureCols
             table['kwargs'].iloc[ii]  = kwargsUp
-            table['sizeSet'].iloc[ii] = sizeSet
+            table['setSize'].iloc[ii] = setSize
             table['rmse_train'].iloc[ii] = results['rmse_train']
             table['rmse_test'].iloc[ii]  = results['rmse_test']
             table['corr_train'].iloc[ii] = results['corr_train'][0]
@@ -397,7 +399,7 @@ class mlModelsCompare:
 
     def plotRunResults(self):
         table = self.table
-        # Plot data, individual pair of curves RMSE_train and RMSE_test vs sizeSet for each other combination of params.
+        # Plot data, individual pair of curves RMSE_train and RMSE_test vs setSize for each other combination of params.
         fig = plt.figure()
         figax = fig.add_subplot(111)
         # Need to convert table content to str for groupby function below (i.e. so it is hashable)
@@ -405,18 +407,18 @@ class mlModelsCompare:
         table['kwargsStr'] = table['kwargs'].apply(lambda x: str(x)) 
         table['featureColsStr'] = table['featureCols'].apply(lambda x: str(x))
         #table.to_csv('tempo/tableDEBUG.csv') ### DEBUG
-        # Find uniq combination of all params except 'sizeSet'.
+        # Find uniq combination of all params except 'setSize'.
         tableUniq = table[['modelTmp','featureColsStr','kwargsStr']].groupby(['modelTmp','featureColsStr','kwargsStr']).first()
         #tableUniq.to_csv('tempo/tableDEBUG2.csv') ### DEBUG
-        # Create a RMSE vs sizeSet plot (based on a tmp table) for each combination of unique other params.
+        # Create a RMSE vs setSize plot (based on a tmp table) for each combination of unique other params.
         for ii in np.arange(len(tableUniq)):
-            # Build table of every sizeSet datapoints for given other param combination.
+            # Build table of every setSize datapoints for given other param combination.
             tableSm = table[(table['modelTmp']==tableUniq['modelTmp'].iloc[ii])
                           & (table['featureColsStr']==tableUniq['featureColsStr'].iloc[ii])
                           & (table['kwargsStr']==tableUniq['kwargsStr'].iloc[ii]) ]
             #TODO: Change to different shade of blue or green for each pass, to dissociate plots.
-            figax.plot(tableSm['sizeSet'], tableSm['rmse_train'], 'g-')
-            figax.plot(tableSm['sizeSet'], tableSm['rmse_test'], 'b-')
+            figax.plot(tableSm['setSize'], tableSm['rmse_train'], 'g-')
+            figax.plot(tableSm['setSize'], tableSm['rmse_test'], 'b-')
         figax.set_xlabel('size set')
         figax.set_ylabel('cost')
         figax.grid(True)
@@ -614,7 +616,7 @@ if __name__ == "__main__":
     #XCols = ['nbUpdates', 'nbComments', 'nbBackers', 'nbFriendsFB', 'amountGoal', lambda x: x**2] # 'amountOver'
     #XCols = ['nbUpdates', 'nbComments', 'nbBackers', 'nbFriendsFB', 'amountGoal', 'nbFriendsFB__nbFriendsFB'] # 'amountOver'
     #yCol = 'amountPledged'
-    #clf, table2, X_train, X_test, y_train, y_test = genModel(table, features=XCols, label=yCol, sizeTrainingSet=2500, n_iter=30)
+    #clf, table2, X_train, X_test, y_train, y_test = genModel(table, features=XCols, label=yCol, setSize=2500, n_iter=30)
 
     # Full set ['nbUpdates', 'nbComments', 'nbBackers', 'nbFriendsFB', 'amountPledged', 'amountGoal', 'amountOver']
     featuresCatAll = ['gender', 'supCat', 'location', 'country', 'platform']
@@ -623,13 +625,13 @@ if __name__ == "__main__":
     #XCols = ['nbUpdates', 'nbComments', 'nbBackers', 'nbFriendsFB', 'amountGoal', 'nbUpdates__nbUpdates', 'nbComments__nbComments', 'nbBackers__nbBackers', 'nbFriendsFB__nbFriendsFB', 'amountGoal__amountGoal'] # 'amountOver'
     target = 'amountPledged'
 
-    testCrit = [10, 30, 100, 300, 1000, 3000] # for sizeTrainingSet
-    testCrit = [10, 20, 30, 50, 100, 300, 600, 1000, 2000, 3000, 10000, 30000] # for sizeTrainingSet
-    #testCrit = [10, 20, 30, 50, 100, 300, 600] # for sizeTrainingSet
-    #testCrit = np.arange(5000,10000,300) # for sizeTrainingSet # 2 bumps to 1E14 with no shuffling.
-    #testCrit = np.arange(500,2000,100) # for sizeTrainingSet
-    #testCrit = np.arange(10,300,10) # for sizeTrainingSet
-    #testCrit = [10,300] # for sizeTrainingSet
+    setSizes = [10, 30, 100, 300, 1000, 3000] # for setSizes
+    setSizes = [10, 20, 30, 50, 100, 300, 600, 1000, 2000, 3000, 10000, 30000] # for setSize
+    #setSizes = [10, 20, 30, 50, 100, 300, 600]
+    #setSizes = np.arange(5000,10000,300) # 2 bumps to 1E14 with no shuffling.
+    #setSizes = np.arange(500,2000,100)
+    #setSizes = np.arange(10,300,10)
+    #setSizes = [10,300]
     model = 'Ridge' # 'LinearRegression', 'SGDRegressor','Ridge'
     # alpha=0.0000000001, n_iter=100
 
