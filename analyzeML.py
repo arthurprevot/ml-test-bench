@@ -13,7 +13,7 @@ fnameIn='data/crowdfunding_4_viz_tmp.csv'
 
 #----------- Gen plots to explore data ----------------------
 print '#---- Gen plots to explore data ----'
-mlAnalysis = mu.tableModel(fnameIn) # just loads data file.
+mlAnalysis = mu.mlModel(fnameIn) # just loads data file.
 #print 'table orig'; print table
 #mlAnalysis.removeOutliers('amountPledged', 1000000)
 #mlAnalysis.removeOutliers('amountGoal', 1000000)
@@ -102,7 +102,7 @@ model = ['Ridge', 'RandomForestRegressor' ] #, 'LinearRegression' is terrible, m
 kwargs = {'alpha':0.001, 'n_iter':100, 'eta0':0.001} # eta0=0.01 default
 kwargs = [{'alpha':0.001, 'n_iter':100, 'eta0':0.001},{'alpha':0.002, 'n_iter':100, 'eta0':0.001}] # eta0=0.01 default
 
-mlMultiTest = mu.tableModels(fnameIn)
+mlMultiTest = mu.mlModelsCompare(fnameIn)
 mlMultiTest.baseModel.shuffle()
 mlMultiTest.baseModel.removeOutliers('amountPledged', 50000)
 targetNumCompare='amountGoal'

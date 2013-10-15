@@ -1,5 +1,4 @@
 #!/usr/bin/python2.7
-# -*- coding: UTF-8 -*-
 
 import numpy as np
 import tabular as tb
@@ -18,69 +17,73 @@ import matplotlib.pyplot as plt
 from matplotlib.markers import MarkerStyle; mkStyles = MarkerStyle()
 
 
-class tableModel:
+class mlModel:
     def __init__(self, fnameIn=None, fcontent=None):
+        """Load table (pandas format) and store in memory. Saves a copy of the original in tableOrig, just for use in some functions."""
         if type(fcontent) !=type(None): # assume it is panda table
-            self.dataOrig = fcontent
+            self.tableOrig = fcontent
         elif fnameIn:
-            self.dataOrig = pd.read_csv(fnameIn)
+            self.tableOrig = pd.read_csv(fnameIn)
         #elif fnameInFeatures and fnameInTarget:
         #    pass #### TBD
         else:
-            print 'pb with input to tableModel class, fnameIn=%s, fcontent=%s'%(fnameIn, fcontent)
-        self.dataCur = self.dataOrig.copy()
+            print 'pb with input to mlModel class, fnameIn=%s, fcontent=%s'%(fnameIn, fcontent)
+        self.table = self.tableOrig.copy()
 
     def removeOutliers(self, colName, threshold, useOrig=True):
+        # Not finished, only allows cutting after a given threshold. TODO: make more generic.
         if useOrig:
-            table = self.dataOrig.copy()
+            table = self.tableOrig.copy()
         else:
-            table = self.dataCur.copy()
+            table = self.table.copy()
         table = table[table[colName] < threshold]
-        self.dataCur = table
+        self.table = table
         return table
 
     def shuffle(self):
-        table = self.dataCur.reindex(np.random.permutation(self.dataCur.index))
+        """Shuffle also available as part of filterTrainVsTest or of mlModels."""
+        table = self.table.reindex(np.random.permutation(self.table.index))
         return table
 
     def genScatter(self,xSource,ySource, colGroup=None, xrange=None, yrange=None, fnameOut='scatter.png'):
-        table = self.dataCur
+        table = self.table
         fig, figax = genScatter(table,xSource,ySource,colGroup, xrange=xrange, yrange=yrange, fnameOut=fnameOut)
         return fig, figax
 
     def genHist(self,xSource, fnameOut='hist.png'):
-        table = self.dataCur
+        table = self.table
         fig, figax = genHist(table,xSource=xSource,fnameOut=fnameOut)
         return fig, figax
 
     def genPlot(self,xSource, ySource, xrange=[]):
-        table = self.dataCur
+        table = self.table
         fig, figax = genPlot(table,xSource, ySource, xrange=xrange)
         return fig, figax
 
     def genLinRegPlot(self,xSource, ySource, xrange=[]):
-        table = self.dataCur
+        table = self.table
         fig, figax = genLinRegPlot(table,xSource, ySource, xrange=xrange)
         return fig, figax
 
     def computeCorrNbs(self, label1, label2):
-        table = self.dataCur
+        table = self.table
         return computeCorrNbs(table,label1, label2)
 
 
     def clfPredAccuracy(self, targetCol, predTargetCol, runOn='all'):
-        table = self.dataCur
+        table = self.table
         if runOn=='test':
             table=table[table['isTrainVsTest']==False]
         elif runOn=='train':
             table=table[table['isTrainVsTest']==True]
 
-        totGood = sum(table[targetCol] == table[predTargetCol]) # may not account for NaN properly
+        totGood = sum(table[targetCol] == table[predTargetCol]) # may not account for NaN properly. TODO: check.
         return float(totGood)/len(table)
 
 
     def filterTrainVsTest(self, features=[], target='n/a',splitRatio=0.66, sizeTrainingSet=None, shuffle=False):
-        table = self.dataCur
+        """Takes care of cleaning table, adding features if required, shuffle if required and splitting the table in train or test sets."""
+        table = self.table
 
         # Get features
         colsOrig = table.columns
@@ -143,7 +146,7 @@ class tableModel:
         table['otherIndex']=pd.Series(np.arange(len(table)), index=table.index) # to have clean index, sequential, as opposed to potentially shuffle one.
         table['isTrainVsTest']=table['otherIndex'] < splitSp # used by other functions later, and for later inspection.
         table.__delitem__('otherIndex')
-        self.dataCur = table
+        self.table = table
         self.featureCols = featuresExisting
         self.targetCol = target
         #print 'List features 2: ', table.columns, ", note: 'isTrainVsTest' added in filterTrainVsTest." # and 'otherIndex'
@@ -160,7 +163,8 @@ class tableModel:
 
 
     def genModel(self, model, features=None, target=None, kwargs={}):
-        table = self.dataCur
+        """Generate the model depending on the algo chosen (i.e. run fit())."""
+        table = self.table
         self.model = model
 
         # Get features and target col names (best to use these attached to class, i.e. set by filterTrainVsTest, as it is consistent with col used for normalizing.) TODO: check cases where good to override.
@@ -251,7 +255,7 @@ class tableModel:
 
     def testModel(self, clf, tableProcDict, targetCol, targetNumCompare, testLabel):
         """Handle model for linear regression, or for linear regression leading to classification (i.e. numerical features) and for pure classification (based on discrete labels only)."""
-        table = self.dataCur
+        table = self.table
         X_train=tableProcDict['X_train']
         X_test =tableProcDict['X_test']
         y_train=tableProcDict['y_train']
@@ -311,12 +315,12 @@ class tableModel:
     # testModels was put in other class. Should consider having methodes to deal with building a model based on multiple models (using bagging).
     # This might require having the class data being duplicated multiple time for each model (could require a lot of memory or to dump them as pickle).
 
-class tableModels:
+class mlModelsCompare:
     """ Class for testing models under variour conditions (dataset sizes, solver, feature) and understand the impact of features (performance, convergence, overfitting, underfitting...).
-    tableModel class might contain a model made of several models combined, so this one may not be the only one handling multiple models, but only one for testing only.
+    mlModel class might contain a model made of several models combined, so this one may not be the only one handling multiple models, but only one for testing only.
     """
     def __init__(self, fnameIn=None, fcontent=None):
-        self.baseModel = tableModel(fnameIn=fnameIn,fcontent=fcontent)
+        self.baseModel = mlModel(fnameIn=fnameIn,fcontent=fcontent)
 
     def testModels(self, model, featureCols, targetCol, targetNumCompare, sizeSet, kwargs):
         """Takes raw values or list of values to generate every combinations."""
@@ -361,7 +365,7 @@ class tableModels:
             ii+=1
             print '###----- item %s in %s'%(sizeSet, sizeSetOrig)
             print '### items:',sizeSet,model,featureCols,kwargs
-            modelCur = tableModel(fcontent=self.baseModel.dataCur)
+            modelCur = mlModel(fcontent=self.baseModel.table)
 
             modelCur.filterTrainVsTest(featureCols, targetCol, sizeTrainingSet=sizeSet)
             clf, tableProcDict, kwargsUp = modelCur.genModel(model, kwargs=kwargs.copy())
@@ -455,14 +459,14 @@ def genScatter(table,xSource,ySource, colGroup=None, xrange=None, yrange=None, f
     #figax.set_yscale('log')
     if xrange: figax.set_xlim(xrange)
     if yrange: figax.set_ylim(yrange)
-#    figax2 = fig.add_subplot(122) # grid 1*2, and go in 2nd box
-#    figax2.set_xlabel(xSource)
-#    figax2.set_ylabel(ySource)
-#    figax2.scatter(x=xSuccess,y=ySuccess, c='g')
-#    figax2.scatter(x=xFailure,y=yFailure, c='r')
-#    figax2.scatter(x=xOther,y=yOther, c='grey')
-#    figax2.set_xlim([-1000,11000])
-#    figax2.set_ylim(yrange)
+    #figax2 = fig.add_subplot(122) # grid 1*2, and go in 2nd box
+    #figax2.set_xlabel(xSource)
+    #figax2.set_ylabel(ySource)
+    #figax2.scatter(x=xSuccess,y=ySuccess, c='g')
+    #figax2.scatter(x=xFailure,y=yFailure, c='r')
+    #figax2.scatter(x=xOther,y=yOther, c='grey')
+    #figax2.set_xlim([-1000,11000])
+    #figax2.set_ylim(yrange)
 
     if fnameOut!=None: plt.savefig(fnameOut, format='png') # fnameOut="test.png"
     plt.show()
