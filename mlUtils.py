@@ -1,20 +1,19 @@
 #!/usr/bin/python2.7
 
-import numpy as np
-import tabular as tb
 import sys
 import os
 import re
+import numpy as np
 import pandas as pd
 import scipy as sp
 import sklearn
 from sklearn import linear_model
+from sklearn import ensemble
+from sklearn import naive_bayes
 from sklearn import preprocessing
 import matplotlib as ml
-#from pylab import plt
-import matplotlib.pyplot as plt
-#from matplotlib import *
-from matplotlib.markers import MarkerStyle; mkStyles = MarkerStyle()
+import matplotlib.pyplot as plt # or "from pylab import plt"
+#from matplotlib.markers import MarkerStyle; mkStyles = MarkerStyle()
 
 
 class mlModel:
@@ -50,9 +49,9 @@ class mlModel:
         fig, figax = genScatter(table,xSource,ySource,colGroup, xrange=xrange, yrange=yrange, fnameOut=fnameOut)
         return fig, figax
 
-    def genHist(self,xSource, fnameOut='hist.png'):
+    def genHist(self,xSource, fnameOut='hist.png', bins=50):
         table = self.table
-        fig, figax = genHist(table,xSource=xSource,fnameOut=fnameOut)
+        fig, figax = genHist(table,xSource=xSource,fnameOut=fnameOut, bins=bins)
         return fig, figax
 
     def genPlot(self,xSource, ySource, xrange=[]):
@@ -200,9 +199,6 @@ class mlModel:
         kwargs = self.removeInvalidKwargs(model, kwargs)
 
         # Run models
-        from sklearn import linear_model
-        from sklearn import ensemble
-        from sklearn import naive_bayes
         if model == 'LinearRegression':
             skModel = linear_model.LinearRegression(**kwargs) # normalize arg can't be used
         elif model == 'LogisticRegression':
@@ -404,7 +400,7 @@ class mlModelsCompare:
             table.sort(['model'], inplace=True)
             table.to_csv(fnameOut) # , encoding='utf_32'
 
-    def plotRunResults(self, plotRmse=True):
+    def plotRunResults(self, plotRmseVsAccuracy=True, fnameOut='allRuns.csv'):
         table = self.table
         # Plot data, individual pair of curves RMSE_train and RMSE_test vs splitRatio for each other combination of params.
         fig = plt.figure()
@@ -424,7 +420,7 @@ class mlModelsCompare:
                           & (table['featureColsStr']==tableUniq['featureColsStr'].iloc[ii])
                           & (table['kwargsStr']==tableUniq['kwargsStr'].iloc[ii]) ]
             #TODO: Change to different shade of blue or green for each pass, to dissociate plots.
-            if 'rmse_train' in tableSm.columns and 'rmse_test' in tableSm.columns and plotRmse:
+            if plotRmseVsAccuracy:
                 figax.plot(tableSm['splitRatio'], tableSm['rmse_train'], 'g-')
                 figax.plot(tableSm['splitRatio'], tableSm['rmse_test'], 'b-')
             else:
@@ -433,8 +429,8 @@ class mlModelsCompare:
         figax.set_xlabel('splitRatio')
         figax.set_ylabel('cost or accuracy')
         figax.grid(True)
+        if fnameOut!=None: plt.savefig(fnameOut, format='png') # fnameOut="test.png"
         plt.show()
-
         #return table
 
 
@@ -485,13 +481,13 @@ def genScatter(table,xSource,ySource, colGroup=None, xrange=None, yrange=None, f
     plt.show()
     return fig, figax
 
-def genHist(table,xSource,fnameOut='hist.png'):
+def genHist(table,xSource,fnameOut='hist.png', bins=50):
     fig = plt.figure()
     figax = fig.add_subplot(111)
     #xSource='amountPledged'
     test = [item for item in table[xSource] if not np.isnan(item)] # could use maskes.
     #n, bins, patches = figax.hist(x=test, bins=1000, facecolor='green') # table[xSource].tolist()
-    n, bins, patches = figax.hist(x=test, bins=10000, facecolor='green', histtype='stepfilled', log=True) # log=True
+    n, bins, patches = figax.hist(x=test, bins=bins, facecolor='green', histtype='stepfilled', log=False) # log=True
     figax.set_xlabel(xSource)
     figax.set_ylabel('Nb Occurences')
     #figax.set_xscale('log')
@@ -564,8 +560,8 @@ def outputTree(tree, fnameOut):
     fh.close()
 
 def computeCorrNbs(table, label1, label2):
-    rmse_train = ml.mlab.rms_flat(table[label1]-table[label2])
-    corr_train = sp.stats.pearsonr(table[label1], table[label2])
+    rmse = ml.mlab.rms_flat(table[label1]-table[label2])
+    corr = sp.stats.pearsonr(table[label1], table[label2])
     results = {'rmse':rmse, 'corr':corr}
     #print results
     return results
