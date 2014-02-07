@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt # or "from pylab import plt"
 
 
 class mlModel:
+    """Class to test one model with one set of inputs."""
     def __init__(self, fnameIn=None, fcontent=None):
         """Load table (pandas format) and store in memory. Saves a copy of the original in tableOrig, just for use in some functions."""
         if type(fcontent) !=type(None): # assume it is panda table
@@ -374,8 +375,6 @@ class mlModelsCompare:
             modelCur.prepTable(featureCols, targetCol, splitRatio=splitRatio, setSize=setSize, shuffle=True)
             skModel, tableProcDict, kwargsUp = modelCur.genModel(model, kwargs=kwargs.copy())
             table2, results = modelCur.testModel(skModel, tableProcDict, targetCol, targetNumCompare, splitRatio)
-            #print results
-            #print table.columns
             
             table['model'].iloc[ii]       = model
             table['featureCols'].iloc[ii] = featureCols
@@ -393,16 +392,14 @@ class mlModelsCompare:
 
     def saveRunResults(self, fnameOut):
         table = self.table
-        # Send table to file
-        #fnameTableOut = 'tempo/table.csv'
         sendToFile = True
         if sendToFile and fnameOut != None:
             table.sort(['model'], inplace=True)
             table.to_csv(fnameOut) # , encoding='utf_32'
 
     def plotRunResults(self, plotRmseVsAccuracy=True, fnameOut='allRuns.csv'):
+        """Plot data, individual pair of curves RMSE_train and RMSE_test vs splitRatio for each other combination of params."""
         table = self.table
-        # Plot data, individual pair of curves RMSE_train and RMSE_test vs splitRatio for each other combination of params.
         fig = plt.figure()
         figax = fig.add_subplot(111)
         # Need to convert table content to str for groupby function below (i.e. so it is hashable)
@@ -681,7 +678,7 @@ skModel.predict([[2., 2.]])
 #table = convertPanda2Tabarray(tablePD)
 
 # Split from http://scikit-learn.github.io/scikit-learn-tutorial/general_concepts.html#classification
-# Found a better way though: 
+# Found a better way though:
 #indices = np.arange(len(X))
 #indices[:10]
 #array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
